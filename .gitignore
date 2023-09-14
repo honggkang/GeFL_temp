@@ -1,3 +1,18 @@
+imgFedCGAN/
+imgFedCVAE/
+imgFedCDDPM/
+imgFedDCGAN/
+generatedImages/
+diffusion_outputs10/
+data/
+cvae_ref/
+MNIST_CDCGAN_results/
+models/save/
+output/
+RAWimgFedCDDPM/
+RAWimgFedCGAN/
+RAWimgFedCVAE/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
