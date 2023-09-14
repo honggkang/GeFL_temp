@@ -4,6 +4,15 @@ from torch.utils.data import DataLoader
 import torch
 import torch.nn.functional as F
 import logging
+import copy
+
+def FedAvg(weights):
+    w_avg = copy.deepcopy(weights[0])
+    for k in w_avg.keys():
+        for i in range(1, len(weights)):
+            w_avg[k] += weights[i][k]
+        w_avg[k] = torch.div(w_avg[k], len(weights))
+    return w_avg
 
 
 def test_img(net_g, datatest, args):

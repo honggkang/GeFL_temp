@@ -1,6 +1,8 @@
 import numpy as np
 from torchvision import datasets, transforms
 from math import sqrt
+import random
+from torch.utils.data import Dataset
 
 # import lasagne
 import pickle
@@ -12,7 +14,21 @@ def unpickle(file):
     return dict
 
 
-def mnist_iid(dataset, num_users):
+class DatasetSplit(Dataset):
+
+    def __init__(self, dataset, idxs):
+        self.dataset = dataset
+        self.idxs = list(idxs)
+
+    def __len__(self):
+        return len(self.idxs)
+
+    def __getitem__(self, item):
+        image, label = self.dataset[self.idxs[item]]
+        return image, label
+
+
+def dict_iid(dataset, num_users):
 
     num_items = int(len(dataset)/num_users)
     dict_users, all_idxs = {}, [i for i in range(len(dataset))]
@@ -95,10 +111,99 @@ def cifar_noniid(args, dataset):
         for rand in rand_set:
             dict_users[i] = np.concatenate((dict_users[i], idxs[rand*num_imgs:(rand+1)*num_imgs]), axis=0)
     return dict_users
+
+
+def noniid_dir(args, beta, dataset):
+    '''
+    Dirichlet distribution
+    smaller beta > 0 parition is more unbalanced
+    '''
+
+    np.random.seed(args.rs)
+    random.seed(args.rs)
+    min_size = 0
+    min_require_size = 10
     
+    N = len(dataset)
+    net_dataidx_map = {}
+    labels = np.array(dataset.targets)
+
+    while min_size < min_require_size:
+        idx_batch = [[] for _ in range(args.num_users)]
+        for k in range(args.num_classes):
+            idx_k = np.where(labels == k)[0]
+            np.random.shuffle(idx_k)
+            proportions = np.random.dirichlet(np.repeat(beta, args.num_users))
+            # logger.info("proportions1: ", proportions)
+            # logger.info("sum pro1:", np.sum(proportions))
+            ## Balance
+            proportions = np.array([p * (len(idx_j) < N / args.num_users) for p, idx_j in zip(proportions, idx_batch)])
+            # logger.info("proportions2: ", proportions)
+            proportions = proportions / proportions.sum()
+            # logger.info("proportions3: ", proportions)
+            proportions = (np.cumsum(proportions) * len(idx_k)).astype(int)[:-1]
+            # logger.info("proportions4: ", proportions)
+            idx_batch = [idx_j + idx.tolist() for idx_j, idx in zip(idx_batch, np.split(idx_k, proportions))]
+            min_size = min([len(idx_j) for idx_j in idx_batch])
+            # if K == 2 and n_parties <= 10:
+            #     if np.min(proportions) < 200:
+            #         min_size = 0
+            #         break
+
+
+    for j in range(args.num_users):
+        np.random.shuffle(idx_batch[j])
+        net_dataidx_map[j] = idx_batch[j]
+    
+    return net_dataidx_map
+
 
 def getDataset(args):
-    if args.dataset =='cifar10':
+    if args.dataset == 'mnist' and args.models == 'mlp':
+        transform_train = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.1307,), (0.3081,)),
+        ])
+
+        transform_test = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.1307,), (0.3081,)),
+        ])
+        
+        dataset_train = datasets.MNIST('/home/hong/NeFL/.data/mnist', train=True, download=True, transform=transform_train)
+        dataset_test = datasets.MNIST('/home/hong/NeFL/.data/mnist', train=False, download=True, transform=transform_test)
+
+    elif args.dataset == 'mnist' and args.models == 'cnn':
+        transform_train = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Resize(32),
+            transforms.Normalize((0.1307,), (0.3081,)),
+        ])
+
+        transform_test = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Resize(32),
+            transforms.Normalize((0.1307,), (0.3081,)),
+        ])
+        
+        dataset_train = datasets.MNIST('/home/hong/NeFL/.data/mnist', train=True, download=True, transform=transform_train)
+        dataset_test = datasets.MNIST('/home/hong/NeFL/.data/mnist', train=False, download=True, transform=transform_test)
+
+    elif args.dataset == 'fmnist':
+        transform_train = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.5,), (0.5,)),
+        ])
+
+        transform_test = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.5,), (0.5,)),
+        ])
+        
+        dataset_train = datasets.FashionMNIST('/home/hong/NeFL/.data/fmnist', train=True, download=True, transform=transform_train)
+        dataset_test = datasets.FashionMNIST('/home/hong/NeFL/.data/fmnist', train=False, download=True, transform=transform_test)
+                
+    elif args.dataset =='cifar10':
         ## CIFAR
         transform_train = transforms.Compose([
             transforms.RandomCrop(32, padding=4), # transforms.Resize(256), transforms.RandomCrop(224),
