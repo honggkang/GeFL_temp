@@ -17,7 +17,7 @@ from utils.average import *
 from utils.getData import *
 from utils.getModels import *
 
-from models.VAE import *
+from lin_generators.VAE import *
 from utils.util import test_img, get_logger
 # from models import *
 # from utils.NeFedAvg import NeFedAvg
@@ -59,7 +59,6 @@ parser.add_argument('--gen_local_ep', type=int, default=10) # local epochs for t
 parser.add_argument('--aid_by_gen', type=bool, default=True)
 
 parser.add_argument('--sample_test', type=int, default=5) # local epochs for training generator
-
 parser.add_argument('--lr', type=float, default=1e-1)
 
 args = parser.parse_args()

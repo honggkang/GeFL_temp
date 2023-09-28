@@ -17,7 +17,7 @@ from utils.average import *
 from utils.getData import *
 from utils.getModels import *
 
-from models.VAE import *
+from lin_generators.VAE import *
 from utils.util import test_img, get_logger
 # from models import *
 # from utils.NeFedAvg import NeFedAvg

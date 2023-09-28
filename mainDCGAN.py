@@ -32,7 +32,7 @@ from utils.average import *
 from utils.getData import *
 from utils.getModels import *
 
-from models.DCGAN import *
+from generators16.DCGAN import *
 from utils.util import test_img, get_logger
 # from models import *
 # from utils.NeFedAvg import NeFedAvg
@@ -41,7 +41,7 @@ from torchsummary import summary
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--num_users', type=int, default=10)
-parser.add_argument('--partial_data', type=float, default=0.1)
+parser.add_argument('--partial_data', type=float, default=0.2)
 
 parser.add_argument('--noniid', action='store_true') # default: false
 parser.add_argument('--dir_param', type=float, default=0.3)
@@ -57,33 +57,35 @@ parser.add_argument('--weight_decay', type=float, default=0)
 parser.add_argument('--rs', type=int, default=0)
 parser.add_argument('--num_classes', type=int, default=10)
 
-parser.add_argument('--num_experiment', type=int, default=3, help="the number of experiments")
-parser.add_argument('--device_id', type=str, default='0')
+parser.add_argument('--num_experiment', type=int, default=1, help="the number of experiments")
+parser.add_argument('--device_id', type=str, default='3')
 parser.add_argument('--pretrained', type=bool, default=False)
 parser.add_argument('--wandb', type=bool, default=False)
 
-parser.add_argument('--models', type=str, default='cnn') # cnn, mlp
-parser.add_argument('--dataset', type=str, default='mnist') # stl10, cifar10, svhn, mnist, fmnist
+parser.add_argument('--models', type=str, default='cnn') # cnn, mlp 
+parser.add_argument('--dataset', type=str, default='svhn') # stl10, cifar10, svhn, mnist, fmnist
 parser.add_argument('--name', type=str, default='under_dev') # L-A: bad character
 
-parser.add_argument('--wu_epochs', type=int, default=10) # warm-up epochs for main networks
-parser.add_argument('--gen_wu_epochs', type=int, default=10) # warm-up epochs for generator
+parser.add_argument('--wu_epochs', type=int, default=20) # warm-up epochs for main networks
+parser.add_argument('--gen_wu_epochs', type=int, default=20) # warm-up epochs for generator
 
 parser.add_argument('--epochs', type=int, default=50) # total communication round (train main nets by (local samples and gen) + train gen)
 parser.add_argument('--local_ep', type=int, default=5) # local epochs for training main nets by local samples
 parser.add_argument('--local_ep_gen', type=int, default=1) # local epochs for training main nets by generated samples
-parser.add_argument('--gen_local_ep', type=int, default=10) # local epochs for training generator
+parser.add_argument('--gen_local_ep', type=int, default=20) # local epochs for training generator
 parser.add_argument('--aid_by_gen', type=bool, default=False)
 
 parser.add_argument('--sample_test', type=int, default=5) # local epochs for training generator
-
+### GAN parameters
 parser.add_argument("--b1", type=float, default=0.5, help="adam: decay of first order momentum of gradient")
 parser.add_argument("--b2", type=float, default=0.999, help="adam: decay of first order momentum of gradient")
 parser.add_argument('--lr', type=float, default=0.0002) # GAN lr
+parser.add_argument('--output_channel', type=int, default=3, help='channel size of image generator generates') # local epochs for training main nets by generated samples
+parser.add_argument('--img_size', type=int, default=16) # local epochs for training generator
 
 args = parser.parse_args()
 args.device = 'cuda:' + args.device_id
-args.img_shape = (1, 16, 16)
+args.img_shape = (args.output_channel, args.img_size, args.img_size)
 
 dataset_train, dataset_test = getDataset(args)
 args.latent_dim = 100
@@ -173,8 +175,8 @@ def main():
 
     common_net.load_state_dict(w_comm)
 
-    gen_glob = generator(args).to(args.device)
-    dis_glob = discriminator().to(args.device)
+    gen_glob = generator(args, d=256).to(args.device)
+    dis_glob = discriminator(args, d=256).to(args.device)
  
     
     gen_w_glob = gen_glob.state_dict()
@@ -290,12 +292,12 @@ def main():
                 print("Testing accuracy " + str(i) + ": {:.2f}".format(acc_test))
                 if args.wandb:
                     wandb.log({
-                        "Communication round": iter,
+                        "Communication round": args.wu_epochs + iter,
                         "Local model " + str(i) + " test accuracy": acc_test
                     })
             if args.wandb:
                 wandb.log({
-                    "Communication round": iter,
+                    "Communication round": args.wu_epochs + iter,
                     "Mean test accuracy": sum(acc_test_tot) / len(acc_test_tot)
                 })
                                     
@@ -304,8 +306,8 @@ def main():
         sample_num = 50
         samples = gen_glob.sample_image_4visualization(sample_num)
         # sample.shape = [10, 256]
-        save_image(samples.view(sample_num, 3, args.feature_size, args.feature_size), 
-                    'imgFedDCGAN/' + 'sample_' + '.png', nrow=10)
+        save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size), 
+                    'imgFedDCGAN/' + 'sample_' + str(args.dataset) + str(args.partial_data) + '.png', nrow=10)
         # save_image(samples.data, 'imgFedCGAN/' + 'sample_' + '.png')
 
     if args.wandb:

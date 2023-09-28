@@ -16,7 +16,7 @@ parser.add_argument("--n_cpu", type=int, default=8, help="number of cpu threads 
 parser.add_argument("--latent_dim", type=int, default=100, help="dimensionality of the latent space") # GAN
 parser.add_argument("--latent_size", type=int, default=20, help="dimensionality of the latent space") # VAE
 parser.add_argument("--n_feat", type=int, default=128) # DDPM
-parser.add_argument("--n_T", type=int, default=100) # DDPM
+parser.add_argument("--n_T", type=int, default=60) # DDPM
 parser.add_argument("--w", type=int, default=1) # DDPM guidance
 
 parser.add_argument("--n_classes", type=int, default=10, help="number of classes for dataset")
@@ -29,11 +29,11 @@ parser.add_argument('--weight_decay', type=float, default=0)
 args = parser.parse_args()
 args.device = 'cuda:' + args.device_id
 
-gennet = DDPM(nn_model=ContextUnet(in_channels=1, n_feat=args.n_feat, n_classes=args.n_classes), betas=(1e-4, 0.02), n_T=100, device=args.device, drop_prob=0.1).to(args.device)
-gennet.load_state_dict(torch.load('models/save/10_400_nT100_ddpm.pt'))
+gennet = DDPM(nn_model=ContextUnet(in_channels=1, n_feat=args.n_feat, n_classes=args.n_classes), betas=(1e-4, 0.02), n_T=args.n_T, device=args.device, drop_prob=0.1).to(args.device)
+gennet.load_state_dict(torch.load('models/save/10_400_nT60_ddpm.pt'))
 gennet.eval()
 
-p_dir = './generatedImages/mnist/10ddpm' + str(args.w) +'_nTt100nTg' + str(args.n_T) + '/'
+p_dir = './generatedImages/mnist/10ddpm' + str(args.w) +'_nTt60nTg' + str(args.n_T) + '/'
 if not os.path.exists(p_dir):
     os.makedirs(p_dir)
 

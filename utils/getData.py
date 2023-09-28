@@ -222,9 +222,9 @@ def getDataset(args):
     elif args.dataset == 'svhn':
         ### SVHN
         transform_train = transforms.Compose([
-                transforms.Pad(padding=2),
-                transforms.RandomCrop(size=(32, 32)),
-                transforms.ColorJitter(brightness=63. / 255., saturation=[0.5, 1.5], contrast=[0.2, 1.8]),
+                # transforms.Pad(padding=2),
+                # transforms.RandomCrop(size=(32, 32)),
+                # transforms.ColorJitter(brightness=63. / 255., saturation=[0.5, 1.5], contrast=[0.2, 1.8]),
                 transforms.ToTensor(),
                 transforms.Normalize((0.4376821, 0.4437697, 0.47280442), (0.19803012, 0.20101562, 0.19703614))
             ])

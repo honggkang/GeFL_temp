@@ -1,5 +1,6 @@
 imgFedCGAN/
 imgFedCVAE/
+imgFedVAE/
 imgFedCDDPM/
 imgFedDCGAN/
 generatedImages/
@@ -12,6 +13,7 @@ output/
 RAWimgFedCDDPM/
 RAWimgFedCGAN/
 RAWimgFedCVAE/
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

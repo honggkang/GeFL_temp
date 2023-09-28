@@ -14,7 +14,7 @@ from utils.average import *
 from utils.getData import *
 from utils.getModels import *
 
-from models.DDPM import *
+from DDPM.ddpm14 import *
 from utils.util import test_img, get_logger
 # from models import *
 # from utils.NeFedAvg import NeFedAvg

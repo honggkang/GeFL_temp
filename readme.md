@@ -19,7 +19,16 @@ parameters (arg)
 
 - aid_by_gen
 
-- img_shape (1, 16, 16)
+- args.img_shape (1, 16, 16)
+
+## Generator
+- Conv-based generator forward: img_ch, img_size, img_size
+- MLP-based generator forward: img_ch x img_size x img_size
+
+- sample_image(self, args) returns [gen_imgs, one_c]
+    - generates random noises and labels of args.local_bs
+    - sample_image_4visualization returns gen_imgs
+
 
 ## LocalUpdate
 to perform local training of main nets
