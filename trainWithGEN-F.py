@@ -14,7 +14,8 @@ from utils.average import *
 from utils.getData import *
 from utils.getModels import *
 
-from lin_generators.GAN import *
+from mainNetModels.cnn3 import *
+from mlp_generators.GAN import *
 from utils.util import test_img, get_logger
 # from models import *
 # from utils.NeFedAvg import NeFedAvg
@@ -57,6 +58,7 @@ parser.add_argument('--lr', type=float, default=0.0002) # GAN lr
 args = parser.parse_args()
 args.device = 'cuda:' + args.device_id
 args.img_shape = (1,28,28)
+
 dataset_train, dataset_test = getDataset(args)
 args.latent_dim = 100
 args.feature_size = 28 # 16
@@ -87,7 +89,7 @@ def main():
     gen_glob = Generator(args).to(args.device)
     gen_glob.load_state_dict(torch.load('models/save/10_400gan_generator.pt'))
 
-    header = FE_CNN3().to(args.device)
+    header = FE_CNN().to(args.device)
     '''
     - 1. Main networks (including a common feature extrator (FE)) are first trained by warming up stages
     - 2. Generator is trained to generate feature (outpu by a common FE) by warming up stages

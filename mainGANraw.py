@@ -14,7 +14,7 @@ from utils.average import *
 from utils.getData import *
 from utils.getModels import *
 
-from lin_generators.GAN import *
+from mlp_generators.GAN import *
 from utils.util import test_img, get_logger
 # from models import *
 # from utils.NeFedAvg import NeFedAvg

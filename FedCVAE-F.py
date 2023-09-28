@@ -14,8 +14,8 @@ from torch.autograd import Variable
 
 import copy
 from generators16.CCVAE import * # creates 3 x 16 x 16
-from models.mlp import *
-from models.cnn import *
+from FeatureExtractor.mlp import *
+from mainNetModels.cnn import *
 from utils.getData import *
 from utils.util import *
 
@@ -35,6 +35,7 @@ parser.add_argument('--models', type=str, default='cnn') # cnn, mlp
 
 parser.add_argument('--num_users', type=int, default=10)
 parser.add_argument('--partial_data', type=float, default=0.1)
+
 parser.add_argument("--img_size", type=int, default=16, help="size of each image dimension")
 parser.add_argument("--output_channel", type=int, default=3, help="number of image channels")
 parser.add_argument('--rs', type=int, default=0)
@@ -54,7 +55,7 @@ ggenerator = CCVAE(args).to(args.device)
 
 generators = []
 for i in range(args.num_users):
-    generators.append(CCVAE(args).to(args.device))       
+    generators.append(CCVAE(args).to(args.device))
     
 # adversarial_loss.to(device) # .cuda()
 # Configure data loader

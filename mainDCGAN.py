@@ -103,7 +103,6 @@ if not args.aid_by_gen:
     args.gen_local_ep = 0
 
 def main():
-
     local_models, common_net = getModel(args)
     ws_glob = []
     for _ in range(args.num_models):

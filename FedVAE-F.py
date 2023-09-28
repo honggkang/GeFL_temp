@@ -12,7 +12,7 @@ import copy
 import numpy as np
 
 from modelsMNIST.VAE import *
-from models.mlp import *
+from mainNetModels.mlp import *
 from utils.getData import *
 from utils.util import *
 
