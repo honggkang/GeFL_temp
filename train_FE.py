@@ -8,8 +8,8 @@ import os
 import copy
 
 from utils.getData import *
-from models.mlp import *
-from models.cnn import *
+from mainNetModels.mlp import *
+from mainNetModels.cnn import *
 from utils.util import test_img
 
 parser = argparse.ArgumentParser()

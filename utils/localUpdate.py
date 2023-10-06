@@ -76,7 +76,9 @@ class LocalUpdate(object):
                 optimizer.step()
 
                 batch_loss.append(loss.item())
-            epoch_loss.append(sum(batch_loss)/len(batch_loss))        
+            epoch_loss.append(sum(batch_loss)/len(batch_loss))
+        if not epoch_loss:
+            epoch_loss = [-1]
         return net.state_dict(), sum(epoch_loss) / len(epoch_loss), gen_loss
 
 
@@ -88,8 +90,9 @@ class LocalUpdate_header(object):
         self.ldr_train = DataLoader(DatasetSplit(dataset, idxs), batch_size=args.local_bs, shuffle=True)
         self.iter = len(idxs)//args.local_bs
         
-    def train(self, net, learning_rate, gennet=None, header=None):
+    def train(self, net, learning_rate, gennet=None, feature_extractor=None):
         net.train()
+        feature_extractor.eval()
 
         optimizer = torch.optim.SGD(net.parameters(), lr=learning_rate, momentum=self.args.momentum, weight_decay=self.args.weight_decay)
         gen_epoch_loss = None
@@ -126,7 +129,7 @@ class LocalUpdate_header(object):
 
             for batch_idx, (images, labels) in enumerate(self.ldr_train):
                 images, labels = images.to(self.args.device), labels.to(self.args.device)
-                images = header(images)
+                images = feature_extractor(images)
                 net.zero_grad()
                 logits, log_probs = net(images, start_layer = 'feature')
                 loss = F.cross_entropy(logits, labels)
@@ -136,9 +139,12 @@ class LocalUpdate_header(object):
 
                 batch_loss.append(loss.item())
             epoch_loss.append(sum(batch_loss)/len(batch_loss))
-
+        if epoch_loss:
+            avg_ep_loss = sum(epoch_loss) / len(epoch_loss)
+        else:
+            avg_ep_loss = -1
         
-        return net.state_dict(), sum(epoch_loss) / len(epoch_loss), gen_loss
+        return net.state_dict(), avg_ep_loss, gen_loss
 
 def one_hot(labels, class_size):
     targets = torch.zeros(labels.size(0), class_size)

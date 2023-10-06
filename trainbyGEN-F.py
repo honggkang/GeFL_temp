@@ -10,12 +10,12 @@ from torch.utils.data import DataLoader
 from modelsMNIST.GAN import *
 from modelsMNIST.VAE import *
 from modelsMNIST.DDPM import *
-from models.mlp import *
+from FeatureExtractor.mlp import *
 
 from generators16.DCGAN import *
 from generators16.CCVAE import *
 
-from models.cnn import *
+from mainNetModels.cnn import *
 
 from utils.util import test_img
 from utils.getData import *

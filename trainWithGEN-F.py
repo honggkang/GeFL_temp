@@ -16,6 +16,7 @@ from utils.getModels import *
 
 from mainNetModels.cnn3 import *
 from mlp_generators.GAN import *
+from generators16.CCVAE import *
 from utils.util import test_img, get_logger
 # from models import *
 # from utils.NeFedAvg import NeFedAvg
@@ -25,39 +26,41 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--num_users', type=int, default=10)
 parser.add_argument('--partial_data', type=float, default=0.1)
 
-parser.add_argument('--frac', type=float, default=0.5)
+parser.add_argument('--frac', type=float, default=1)
 parser.add_argument('--bs', type=int, default=32)
 parser.add_argument('--local_bs', type=int, default=32)
 parser.add_argument('--batch_size', type=int, default=32) # sample image
-
-parser.add_argument('--momentum', type=float, default=0)
-parser.add_argument('--local_ep', type=int, default=5)
-
+parser.add_argument('--local_ep', type=int, default=5) # local epochs for training main nets by local samples
+parser.add_argument('--local_ep_gen', type=int, default=1)
+### optimizer
 parser.add_argument('--weight_decay', type=float, default=0)
-parser.add_argument('--mode', type=str, default='normal') # normal worst
+parser.add_argument('--momentum', type=float, default=0)
+
 parser.add_argument('--rs', type=int, default=0)
 parser.add_argument('--num_classes', type=int, default=10)
-
-parser.add_argument('--min_flex_num', type=int, default=0, help="0:0~ max(0,tc-args.min_flex_num)")
-parser.add_argument('--max_flex_num', type=int, default=0, help="0:~4 min(tc+args.max_flex_num+1,5)")
-
 parser.add_argument('--num_experiment', type=int, default=3, help="the number of experiments")
 parser.add_argument('--device_id', type=str, default='0')
 parser.add_argument('--pretrained', type=bool, default=False)
 parser.add_argument('--wandb', type=bool, default=False)
 
+parser.add_argument('--gen', type=str, default='cvae') # cnn, mlp
+parser.add_argument('--models', type=str, default='cnn') # cnn, mlp
 parser.add_argument('--dataset', type=str, default='mnist') # stl10, cifar10, svhn, mnist
 parser.add_argument('--name', type=str, default='under_dev') # L-A: bad character
-parser.add_argument('--wu_epochs', type=int, default=0) # warm-up epochs
 parser.add_argument('--epochs', type=int, default=50)
-
+### GAN
 parser.add_argument("--b1", type=float, default=0.5, help="adam: decay of first order momentum of gradient")
 parser.add_argument("--b2", type=float, default=0.999, help="adam: decay of first order momentum of gradient")
 parser.add_argument('--lr', type=float, default=0.0002) # GAN lr
+### CVAE
+parser.add_argument('--latent_size', type=int, default=16) # local epochs for training generator
+### output size
+parser.add_argument('--output_channel', type=int, default=3)
+parser.add_argument('--img_size', type=int, default=16)
 
 args = parser.parse_args()
 args.device = 'cuda:' + args.device_id
-args.img_shape = (1,28,28)
+# args.img_shape = (1,28,28)
 
 dataset_train, dataset_test = getDataset(args)
 args.latent_dim = 100
@@ -68,11 +71,17 @@ dict_users = cifar_iid(dataset_train, int(1/args.partial_data*args.num_users), a
 
 def main():
 
-    local_models = getModelwoC(args)
+    local_models, header = getModel(args) # header = FE_CNN().to(args.device)
+    header.load_state_dict(torch.load('models/save/0.1_100CNN_common_net.pt'))
+    wh = header.state_dict()
     ws_glob = []
-    for _ in range(args.num_models):
-        ws_glob.append(local_models[_].state_dict())
 
+    for _ in range(args.num_models):
+        w = local_models[_].state_dict()
+        for key in wh:
+            w[key] = wh[key]
+        ws_glob.append(local_models[_].state_dict())
+        
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     filename = './output/gefl/'+ timestamp + str(args.name) + str(args.rs)
     if not os.path.exists(filename):
@@ -86,31 +95,15 @@ def main():
     loss_train = []
     lr = 1e-1 # MLP
 
-    gen_glob = Generator(args).to(args.device)
-    gen_glob.load_state_dict(torch.load('models/save/10_400gan_generator.pt'))
-
-    header = FE_CNN().to(args.device)
-    '''
-    - 1. Main networks (including a common feature extrator (FE)) are first trained by warming up stages
-    - 2. Generator is trained to generate feature (outpu by a common FE) by warming up stages
-    
-    Clients train main networks with local dataset
-    Clients share common feature extractor and a server FedAvg feature extrator
-    LOOP:
-        === Training Generator ===
-        1. Clients create intermittent features of local dataset
-        2. Clients train generator by local feature dataset and share it - FedAvg
-
-        === Training Main Net ===
-        3. Clients train main networks with local dataset and features sampled by generator
-    '''
-    '''
-    Each client: get parameter from ws_glob and local update. Save updated parameter to ws_local
-    FedAvg ws_local and save it ws_glob
-    '''
+    if args.gen == 'gan':
+        gen_glob = Generator(args).to(args.device)
+        gen_glob.load_state_dict(torch.load('models/save/10_400gan_generator.pt'))
+    elif args.gen == 'cvae':
+        gen_glob = CCVAE(args).to(args.device)
+        gen_glob.load_state_dict(torch.load('models/save/F10_400cvae.pt'))
+        
 
     best_perf = [0 for _ in range(args.num_models)]
-
     for iter in range(1,args.epochs+1):
         ws_local = [[] for _ in range(args.num_models)]
         
@@ -126,8 +119,8 @@ def main():
             model_idx = dev_spec_idx
             model = local_models[model_idx]
             model.load_state_dict(ws_glob[model_idx])
-            local = LocalUpdate(args, dataset=dataset_train, idxs=dict_users[idx])
-            weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), gennet=copy.deepcopy(gen_glob), learning_rate=lr, commNet=False)
+            local = LocalUpdate_header(args, dataset=dataset_train, idxs=dict_users[idx])
+            weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), gennet=copy.deepcopy(gen_glob), header=header, learning_rate=lr)
             # weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), learning_rate=lr, commNet=False)
             
             ws_local[model_idx].append(weight)
@@ -142,7 +135,7 @@ def main():
         except:
             gen_loss_avg = None
 
-        print(loss_avg)
+        # print(loss_avg)
         loss_train.append(loss_avg)
         if iter % 10 == 0 or iter == args.epochs:
             for i in range(args.num_models):

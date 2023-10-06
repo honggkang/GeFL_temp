@@ -13,8 +13,8 @@ from torch.utils.data import Dataset
 from torch.autograd import Variable
 
 from generators16.DCGAN import * # creates 3 x 16 x 16
-from models.mlp import *
-from models.cnn import *
+from FeatureExtractor.mlp import *
+from mainNetModels.cnn import *
 from utils.getData import *
 from utils.util import *
 

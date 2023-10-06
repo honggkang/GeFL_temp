@@ -11,8 +11,8 @@ from modelsMNIST.GAN import *
 from modelsMNIST.VAE import *
 from modelsMNIST.DDPM import *
 
-from models.mlp import *
-from models.cnn3 import *
+from FeatureExtractor.mlp import *
+from FeatureExtractor.cnn3 import *
 
 from utils.util import test_img
 from utils.getData import *

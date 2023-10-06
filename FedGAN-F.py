@@ -14,7 +14,7 @@ from torch.autograd import Variable
 
 import copy
 from modelsMNIST.GAN import *
-from models.mlp import *
+from FeatureExtractor.mlp import *
 from utils.getData import *
 from utils.util import *
 

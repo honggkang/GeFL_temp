@@ -10,8 +10,8 @@ from utils.localUpdate import *
 from utils.getData import *
 from utils.average import *
 from utils.util import test_img
-from models.mlp import *
-from models.cnn import *
+from FeatureExtractor.mlp import *
+from mainNetModels.cnn import *
 
 parser = argparse.ArgumentParser()
 # parser.add_argument('--num_users', type=int, default=100)
