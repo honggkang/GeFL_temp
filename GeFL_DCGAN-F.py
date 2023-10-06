@@ -41,15 +41,15 @@ from torchsummary import summary
 
 parser = argparse.ArgumentParser()
 ### clients
-parser.add_argument('--num_users', type=int, default=10)
-parser.add_argument('--frac', type=float, default=1)
+parser.add_argument('--num_users', type=int, default=100)
+parser.add_argument('--frac', type=float, default=0.1)
 ### model & feature size
 parser.add_argument('--models', type=str, default='cnn') # cnn, mlp
 parser.add_argument('--output_channel', type=int, default=3, help='channel size of image generator generates') # local epochs for training main nets by generated samples
 parser.add_argument('--img_size', type=int, default=16) # local epochs for training generator
 ### dataset
 parser.add_argument('--dataset', type=str, default='mnist') # stl10, cifar10, svhn, mnist, fmnist
-parser.add_argument('--partial_data', type=float, default=0.1)
+parser.add_argument('--partial_data', type=float, default=1)
 parser.add_argument('--noniid', action='store_true') # default: false
 parser.add_argument('--dir_param', type=float, default=0.3)
 parser.add_argument('--num_classes', type=int, default=10)
@@ -75,7 +75,8 @@ parser.add_argument('--gen_local_ep', type=int, default=5) # local epochs for tr
 parser.add_argument('--aid_by_gen', type=bool, default=False)
 parser.add_argument('--freeze_FE', type=bool, default=False)
 parser.add_argument('--freeze_gen', type=bool, default=False)
-###logging
+parser.add_argument('--only_gen', type=bool, default=False)
+### logging
 parser.add_argument('--sample_test', type=int, default=5) # local epochs for training generator
 parser.add_argument('--wandb', type=bool, default=True)
 parser.add_argument('--name', type=str, default='under_dev') # L-A: bad character
@@ -130,7 +131,7 @@ def main():
     if not os.path.exists(filename):
         os.makedirs(filename)
     if args.wandb:
-        run = wandb.init(dir=filename, project='GeFL-DCGAN-1006', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
+        run = wandb.init(dir=filename, project='GeFL-DCGAN-1006-fraction', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
         wandb.config.update(args)
     # logger = get_logger(logpath=os.path.join(filename, 'logs'), filepath=os.path.abspath(__file__))
     
@@ -264,11 +265,15 @@ def main():
             model = local_models[model_idx]
             model.load_state_dict(ws_glob[model_idx])
             if args.freeze_FE:
-                local = LocalUpdate_header(args, dataset=dataset_train, idxs=dict_users[idx])
-                if args.aid_by_gen:
-                    weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), feature_extractor=common_net, gennet=copy.deepcopy(gen_glob), learning_rate=lr)
+                if args.only_gen: # necessarily aid_by_gen=True & freeze_FE=True
+                    local = LocalUpdate_onlyGen(args, dataset=dataset_train, idxs=dict_users[idx])
+                    weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), feature_start=True, gennet=copy.deepcopy(gen_glob), learning_rate=lr)
                 else:
-                    weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), feature_extractor=common_net, learning_rate=lr) # weights of models
+                    local = LocalUpdate_header(args, dataset=dataset_train, idxs=dict_users[idx])
+                    if args.aid_by_gen:
+                        weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), feature_extractor=common_net, gennet=copy.deepcopy(gen_glob), learning_rate=lr)
+                    else:
+                        weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), feature_extractor=common_net, learning_rate=lr) # weights of models
             else:
                 local = LocalUpdate(args, dataset=dataset_train, idxs=dict_users[idx])
                 if args.aid_by_gen:
