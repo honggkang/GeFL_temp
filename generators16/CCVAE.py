@@ -111,7 +111,7 @@ class CCVAE(nn.Module):
         return pred, one_c
 
     def sample_image_4visualization(self, sample_num):
-        z = torch.randn(sample_num, self.args.latent_size).to(self.args.device)
+        z = torch.randn(sample_num, self.args.latent_size)
         y = torch.arange(0,10)
         y = y.repeat(int(sample_num/y.shape[0]))
 
@@ -120,7 +120,7 @@ class CCVAE(nn.Module):
             label[np.arange(z.shape[0]), y] = 1
             label = torch.tensor(label)
 
-            pred = self.decoder(torch.cat((z.to(device),label.float().to(device)), dim=1))
+            pred = self.decoder(torch.cat((z,label.float().to(self.args.device)), dim=1))
         return pred
         
 def plot(epoch, pred, y,name='test_'):

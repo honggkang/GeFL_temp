@@ -21,7 +21,7 @@ import copy
 from modelsMNIST.GAN import *
 from utils.getData import *
 from utils.util import *
-from torchsummaryX import summary
+# from torchsummaryX import summary
 
 os.makedirs("RAWimgFedCGAN", exist_ok=True)
 
@@ -82,8 +82,8 @@ bs=2
 z = Variable(FloatTensor(np.random.normal(0, 1, (bs, opt.latent_dim))))
 c = Variable(LongTensor(np.random.randint(0, opt.n_classes, bs)))
 x = torch.zeros(bs,1,28,28, device='cuda') # 
-summary(ggenerator, z, c) # torchsummaryX
-summary(gdiscriminator, x, c)
+# summary(ggenerator, z, c) # torchsummaryX
+# summary(gdiscriminator, x, c)
 
 # Configure data loader
 os.makedirs("./data/mnist", exist_ok=True)

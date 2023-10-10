@@ -1,5 +1,6 @@
 '''
 https://github.com/znxlwm/pytorch-MNIST-CelebA-cGAN-cDCGAN/tree/master
+
 Conv2dtranspose
 https://towardsdatascience.com/what-is-transposed-convolutional-layer-40e5e6e31c11
 https://velog.io/@hayaseleu/Transposed-Convolutional-Layer%EC%9D%80-%EB%AC%B4%EC%97%87%EC%9D%B8%EA%B0%80
@@ -38,15 +39,12 @@ class generator(nn.Module):
         self.deconv1_1_bn = nn.BatchNorm2d(d*2)
         self.deconv1_2 = nn.ConvTranspose2d(10, d*2, 4, 1, 0)
         self.deconv1_2_bn = nn.BatchNorm2d(d*2)
-        
         self.deconv2 = nn.ConvTranspose2d(d*4, d*2, 4, 2, 1)
         self.deconv2_bn = nn.BatchNorm2d(d*2)
-        
         self.deconv3 = nn.ConvTranspose2d(d*2, d, 4, 2, 1)
         self.deconv3_bn = nn.BatchNorm2d(d)
         self.deconv4 = nn.ConvTranspose2d(d, 1, 4, 2, 1)
-
-        self.deconv5 = nn.ConvTranspose2d(d*2, args.output_channel, 4, 2, 1)
+        # self.deconv5 = nn.ConvTranspose2d(d*2, args.output_channel, 4, 2, 1)
         
         self.args = args
 
@@ -57,23 +55,19 @@ class generator(nn.Module):
 
     # forward method
     def forward(self, input, label):
-        x = F.leaky_relu(self.deconv1_1_bn(self.deconv1_1(input)), 0.2) # 256 x 4 x 4
-        y = F.leaky_relu(self.deconv1_2_bn(self.deconv1_2(label)), 0.2) # 256 x 4 x 4
-        x = torch.cat([x, y], 1) # 512 x 4 x 4
-        x = F.leaky_relu(self.deconv2_bn(self.deconv2(x)), 0.2) # 256 x 8 x 8
-        # x = torch.tanh(self.deconv5(x)) # 1 x 16 x 16
-        x = F.relu(self.deconv5(x)) # 3 x 16 x 16
-        '''
-        Note: tanh generates -1~1 and sigmoid generates 0~1
-        - Positive vales that exceed 1 were observed for feature images (Why?)
-        - Therefore, we emplyed relu for generator.
-        - It remains for further study to check relu-based activation functions
-            - Leaky ReLU, GeLU
-        - 1 ch img: F.relu
-        - 3 ch img: F.leaky_relu
-        '''
-        # x = F.relu(self.deconv3_bn(self.deconv3(x))) # 128 x 16 x 16
-        # x = F.tanh(self.deconv4(x)) # 1 x 32 x 32
+        x = F.relu(self.deconv1_1_bn(self.deconv1_1(input)))
+        y = F.relu(self.deconv1_2_bn(self.deconv1_2(label)))
+        x = torch.cat([x, y], 1)
+        x = F.relu(self.deconv2_bn(self.deconv2(x)))
+        x = F.relu(self.deconv3_bn(self.deconv3(x)))
+        
+        # x = F.leaky_relu(self.deconv1_1_bn(self.deconv1_1(input)), 0.2)
+        # y = F.leaky_relu(self.deconv1_2_bn(self.deconv1_2(label)), 0.2)
+        # x = torch.cat([x, y], 1)
+        # x = F.leaky_relu(self.deconv2_bn(self.deconv2(x)), 0.2)
+        # x = F.leaky_relu(self.deconv3_bn(self.deconv3(x)), 0.2)        
+        
+        x = torch.tanh(self.deconv4(x))
         
         return x
 
@@ -115,6 +109,7 @@ class generator(nn.Module):
 
             return gen_imgs
 
+
 class discriminator(nn.Module):
     # initializers
     def __init__(self, args, d=128):
@@ -126,8 +121,8 @@ class discriminator(nn.Module):
         self.conv2_bn = nn.BatchNorm2d(d*2)
         self.conv3 = nn.Conv2d(d*2, d*4, 4, 2, 1) # 256 512
         self.conv3_bn = nn.BatchNorm2d(d*4)
-        # self.conv4 = nn.Conv2d(d * 4, 1, 4, 1, 0) # 512 1
-        self.conv4 = nn.Conv2d(d * 4, 1, 2, 1, 0) # 512 1
+        self.conv4 = nn.Conv2d(d * 4, 1, 4, 1, 0) # 512 1
+        # self.conv4 = nn.Conv2d(d * 4, 1, 2, 1, 0) # 512 1
 
     # weight_init
     def weight_init(self, mean, std):
@@ -135,13 +130,13 @@ class discriminator(nn.Module):
             normal_init(self._modules[m], mean, std)
 
     # forward method
-    def forward(self, input, label): # if input 1 x 16 x 16
-        x = F.leaky_relu(self.conv1_1(input), 0.2) # 64 x 8 x 8
-        y = F.leaky_relu(self.conv1_2(label), 0.2) # 
-        x = torch.cat([x, y], 1)
-        x = F.leaky_relu(self.conv2_bn(self.conv2(x)), 0.2)
-        x = F.leaky_relu(self.conv3_bn(self.conv3(x)), 0.2)
-        x = torch.sigmoid(self.conv4(x))
+    def forward(self, input, label): # input 1 x 32 x 32
+        x = F.leaky_relu(self.conv1_1(input), 0.2) # 128 x 16 x 16
+        y = F.leaky_relu(self.conv1_2(label), 0.2) # 128 x 16 x 16
+        x = torch.cat([x, y], 1) # 256 x 16 x  16
+        x = F.leaky_relu(self.conv2_bn(self.conv2(x)), 0.2) # 512 x 8 x 8
+        x = F.leaky_relu(self.conv3_bn(self.conv3(x)), 0.2) # 1024 x 4 x 4
+        x = torch.sigmoid(self.conv4(x)) #
 
         return x
 

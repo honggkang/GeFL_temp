@@ -8,8 +8,9 @@ from torchvision.datasets import MNIST
 from torchvision import models, transforms
 from torchvision.utils import save_image, make_grid
 # from torchsummary import summary
-from torchsummaryX import summary
+# from torchsummaryX import summary
 
+import copy
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
 
@@ -208,9 +209,6 @@ def ddpm_schedules(beta1, beta2, T):
         "mab_over_sqrtmab": mab_over_sqrtmab_inv,  # (1-\alpha_t)/\sqrt{1-\bar{\alpha_t}}
     }
 
-
-import copy
-
 class DDPM(nn.Module):
     def __init__(self, nn_model, betas, n_T, device, drop_prob=0.1):
         super(DDPM, self).__init__()
@@ -294,12 +292,13 @@ class DDPM(nn.Module):
         x_i_store = np.array(x_i_store)
         return x_i, x_i_store
 
-    def sample_image(self, args, size = (1, 14, 14), guide_w = 0.0):
+    def sample_image(self, args, guide_w = 0.0):
         # we follow the guidance sampling scheme described in 'Classifier-Free Diffusion Guidance'
         # to make the fwd passes efficient, we concat two versions of the dataset,
         # one with context_mask=0 and the other context_mask=1
         # we then mix the outputs with the guidance scale, w
         # where w>0 means more guidance
+        size = (args.output_channel, args.img_size, args.img_size)
 
         x_i = torch.randn(args.local_bs, *size).to(args.device)  # x_T ~ N(0, 1), sample initial noise
         c_i = torch.randint(10, (args.local_bs, )).to(self.device) # MAX_NUM, (SIZE, )
@@ -342,7 +341,8 @@ class DDPM(nn.Module):
             #     x_i_store.append(x_i.detach().cpu().numpy())
         
         # x_i_store = np.array(x_i_store)
-        return x_i.view(-1, size[1]*size[2]), out_c
+        # return x_i.view(-1, size[1]*size[2]), out_c
+        return x_i, out_c
 
 def train_mnist():
 

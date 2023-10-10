@@ -288,37 +288,6 @@ class LocalUpdate_CCVAE(object): # VAE
         return net.state_dict(), sum(epoch_loss) / len(epoch_loss)
     
 
-class LocalUpdate_VAE_raw(object): # VAE raw
-    def __init__(self, args, dataset=None, idxs=None):
-        self.args = args
-        self.selected_clients = []
-        self.ldr_train = DataLoader(DatasetSplit(dataset, idxs), batch_size=args.local_bs, shuffle=True, drop_last=True)
-
-    def train(self, net):
-        net.train()
-        # train and update
-        # optimizer = torch.optim.SGD(net.parameters(), lr=learning_rate, momentum=self.args.momentum, weight_decay=self.args.weight_decay)
-        optimizer = torch.optim.Adam(net.parameters(), lr=1e-3)
-        epoch_loss = []       
-
-        for iter in range(self.args.local_ep):
-            batch_loss = []
-            train_loss = 0
-            for batch_idx, (images, labels) in enumerate(self.ldr_train):
-                images = images.to(self.args.device) # images.shape: torch.Size([batch_size, 1, 28, 28])
-                labels = one_hot(labels, 10).to(self.args.device)
-                                
-                recon_batch, mu, logvar = net(images, labels)
-                optimizer.zero_grad()
-                loss = loss_function(recon_batch, images.view(-1,self.args.feature_size*self.args.feature_size), mu, logvar)
-                loss.backward()
-                train_loss += loss.detach().cpu().numpy()
-                optimizer.step()
-                batch_loss.append(loss.item())
-            epoch_loss.append(sum(batch_loss)/len(batch_loss))
-        return net.state_dict(), sum(epoch_loss) / len(epoch_loss)
-    
-
 class LocalUpdate_DDPM(object): # DDPM
     def __init__(self, args, net_com, dataset=None, idxs=None):
         self.args = args
@@ -327,7 +296,7 @@ class LocalUpdate_DDPM(object): # DDPM
         self.ldr_train = tqdm(DataLoader(DatasetSplit(dataset, idxs), batch_size=args.local_bs, shuffle=True, drop_last=True))
         self.lr = 1e-4
 
-    def train(self, net, round):
+    def train(self, net, lr_decay_rate):
         net.train()
         self.feature_extractor.eval()
         # train and update
@@ -335,8 +304,8 @@ class LocalUpdate_DDPM(object): # DDPM
         epoch_loss = []
 
         for iter in range(self.args.local_ep):
-            optim.param_groups[0]['lr'] = self.lr*(1-(self.args.local_ep*(round-1) + iter)/(self.args.local_ep*(self.args.epochs+self.args.wu_epochs)))
-
+            optim.param_groups[0]['lr'] = self.lr*lr_decay_rate
+            # (1-(self.args.local_ep*(round-1) + iter)/(self.args.local_ep*(self.args.epochs+self.args.wu_epochs)))
             loss_ema = None
             batch_loss = []
             train_loss = 0
@@ -347,7 +316,7 @@ class LocalUpdate_DDPM(object): # DDPM
                 images = images.to(self.args.device) # images.shape: torch.Size([batch_size, 1, 28, 28])
                 labels = labels.to(self.args.device)
                 images = self.feature_extractor(images) # x.view(-1, self.feature_size*self.feature_size) in CVAE.forward 
-                images = images.view(-1, 1, self.args.feature_size, self.args.feature_size)
+                # images = images.view(-1, self.args.output_channel, self.args.img_size, self.args.img_size)
                 # images = images.view(-1, 1, self.args.feature_size, self.args.feature_size) # self.args.local_bs
                 # save_image(images.view(self.args.local_bs, 1, 14, 14),
                 #             'imgFedCVAE/' + 'sample_' + '.png')
@@ -422,8 +391,8 @@ class LocalUpdate_GAN(object): # GAN
                 gen_labels = Variable(LongTensor(np.random.randint(0, self.args.num_classes, batch_size))).to(self.args.device)
                 
                 # Generate a batch of images
-                gen_imgs = gnet(z, gen_labels)
-                gen_imgs = gen_imgs.view(gen_imgs.size(0), *self.args.img_shape)
+                gen_imgs = gnet(z, gen_labels) # 196 (14*14)
+                gen_imgs = gen_imgs.view(gen_imgs.size(0), *self.args.img_shape) # (1, 14, 14)
                 
                 # Loss measures generator's ability to fool the discriminator
                 validity = dnet(gen_imgs, gen_labels)
@@ -487,7 +456,7 @@ class LocalUpdate_DCGAN(object): # DCGAN
         # label preprocess
         onehot = torch.zeros(10, 10)
         img_size = self.args.img_shape[1]
-        batch_size = self.args.batch_size
+        batch_size = self.args.local_bs
 
         onehot = onehot.scatter_(1, torch.LongTensor([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]).view(10,1), 1).view(10, 10, 1, 1) # 10 x 10 eye matrix
         fill = torch.zeros([10, 10, img_size, img_size])
@@ -669,3 +638,34 @@ class LocalUpdate_GAN_raw(object): # GAN
             g_epoch_loss.append(sum(g_batch_loss)/len(g_batch_loss))
             d_epoch_loss.append(sum(d_batch_loss)/len(d_batch_loss))
         return gnet.state_dict(), dnet.state_dict(), sum(g_epoch_loss) / len(g_epoch_loss), sum(d_epoch_loss) / len(d_epoch_loss)
+    
+
+class LocalUpdate_VAE_raw(object): # VAE raw
+    def __init__(self, args, dataset=None, idxs=None):
+        self.args = args
+        self.selected_clients = []
+        self.ldr_train = DataLoader(DatasetSplit(dataset, idxs), batch_size=args.local_bs, shuffle=True, drop_last=True)
+
+    def train(self, net):
+        net.train()
+        # train and update
+        # optimizer = torch.optim.SGD(net.parameters(), lr=learning_rate, momentum=self.args.momentum, weight_decay=self.args.weight_decay)
+        optimizer = torch.optim.Adam(net.parameters(), lr=1e-3)
+        epoch_loss = []       
+
+        for iter in range(self.args.local_ep):
+            batch_loss = []
+            train_loss = 0
+            for batch_idx, (images, labels) in enumerate(self.ldr_train):
+                images = images.to(self.args.device) # images.shape: torch.Size([batch_size, 1, 28, 28])
+                labels = one_hot(labels, 10).to(self.args.device)
+                                
+                recon_batch, mu, logvar = net(images, labels)
+                optimizer.zero_grad()
+                loss = loss_function(recon_batch, images.view(-1,self.args.feature_size*self.args.feature_size), mu, logvar)
+                loss.backward()
+                train_loss += loss.detach().cpu().numpy()
+                optimizer.step()
+                batch_loss.append(loss.item())
+            epoch_loss.append(sum(batch_loss)/len(batch_loss))
+        return net.state_dict(), sum(epoch_loss) / len(epoch_loss)
