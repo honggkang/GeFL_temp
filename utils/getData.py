@@ -189,14 +189,16 @@ def getDataset(args):
         dataset_train = datasets.MNIST('/home/hong/NeFL/.data/mnist', train=True, download=True, transform=transform_train)
         dataset_test = datasets.MNIST('/home/hong/NeFL/.data/mnist', train=False, download=True, transform=transform_test)
 
-    elif args.dataset == 'fmnist':
+    elif args.dataset == 'fmnist' and args.models == 'cnn':
         transform_train = transforms.Compose([
             transforms.ToTensor(),
+            transforms.Resize(32),
             transforms.Normalize((0.5,), (0.5,)),
         ])
 
         transform_test = transforms.Compose([
             transforms.ToTensor(),
+            transforms.Resize(32),
             transforms.Normalize((0.5,), (0.5,)),
         ])
         
