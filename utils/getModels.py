@@ -13,7 +13,7 @@ def getModel(args):
     torch.cuda.manual_seed_all(args.rs) # if use multi-GPU
 
     local_models = []
-    if args.models == 'cnn' and args.dataset == 'mnist':
+    if args.models == 'cnn' and (args.dataset == 'mnist' or args.dataset == 'fmnist'):
         from mainNetModels.cnn import CNN2, CNN3, CNN3b, CNN3c, CNN4, CNN4b, CNN4c, CNN5, CNN5b, CNN5c, FE_CNN
         net_temp1 = CNN2().to(args.device)
         net_temp2 = CNN3().to(args.device)
@@ -27,6 +27,7 @@ def getModel(args):
         net_temp5 = CNN5c().to(args.device)
         
         common_net = FE_CNN().to(args.device)
+
 
     elif args.models == 'cnn' and args.dataset == 'svhn':
         from mainNetModels.cnn3 import CNN2, CNN3, CNN3b, CNN3c, CNN4, CNN4b, CNN4c, CNN5, CNN5b, CNN5c, FE_CNN
