@@ -8,7 +8,7 @@ from torchvision.datasets import MNIST
 from torchvision import models, transforms
 from torchvision.utils import save_image, make_grid
 # from torchsummary import summary
-from torchsummaryX import summary
+# from torchsummaryX import summary
 
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter

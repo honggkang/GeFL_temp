@@ -159,7 +159,7 @@ def noniid_dir(args, beta, dataset):
 
 
 def getDataset(args):
-    if args.dataset == 'mnist' and args.models == 'mlp':
+    if args.dataset == 'mnist' and 'mlp' in args.models:
         transform_train = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize((0.1307,), (0.3081,)),
@@ -173,17 +173,17 @@ def getDataset(args):
         dataset_train = datasets.MNIST('/home/hong/NeFL/.data/mnist', train=True, download=True, transform=transform_train)
         dataset_test = datasets.MNIST('/home/hong/NeFL/.data/mnist', train=False, download=True, transform=transform_test)
 
-    elif args.dataset == 'mnist' and args.models == 'cnn':
+    elif args.dataset == 'mnist' and 'cnn' in args.models:
         transform_train = transforms.Compose([
             transforms.ToTensor(),
             transforms.Resize(32),
-            transforms.Normalize((0.1307,), (0.3081,)),
+            # transforms.Normalize((0.1307,), (0.3081,)), # DCGAN 0.5
         ])
 
         transform_test = transforms.Compose([
             transforms.ToTensor(),
             transforms.Resize(32),
-            transforms.Normalize((0.1307,), (0.3081,)),
+            # transforms.Normalize((0.1307,), (0.3081,)), # DCGAN 0.5
         ])
         
         dataset_train = datasets.MNIST('/home/hong/NeFL/.data/mnist', train=True, download=True, transform=transform_train)

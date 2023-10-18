@@ -16,6 +16,7 @@ LOOP:
 Each client: get parameter from ws_glob and local update. Save updated parameter to ws_local
 FedAvg ws_local and save it ws_glob
 '''
+
 from torchvision.utils import save_image
 
 import argparse, os
@@ -31,6 +32,10 @@ from utils.getData import *
 from utils.getModels import *
 
 from DDPM.ddpm16 import *
+'''
+DDPM.ddpm14 features  / DDPM.ddpm16 features
+DDPM.ddpm28 orig/feat / DDPM.ddpm32 orig
+'''
 from utils.util import test_img, get_logger
 # from models import *
 # from utils.NeFedAvg import NeFedAvg
@@ -46,7 +51,7 @@ parser.add_argument('--models', type=str, default='cnn') # cnn, mlp
 parser.add_argument('--output_channel', type=int, default=3) # local epochs for training generator
 parser.add_argument('--img_size', type=int, default=16) # local epochs for training generator
 ### dataset
-parser.add_argument('--dataset', type=str, default='fmnist') # stl10, cifar10, svhn, mnist, emnist
+parser.add_argument('--dataset', type=str, default='mnist') # stl10, cifar10, svhn, mnist, emnist
 parser.add_argument('--noniid', action='store_true') # default: false
 parser.add_argument('--dir_param', type=float, default=0.3)
 parser.add_argument('--num_classes', type=int, default=10)
@@ -80,9 +85,11 @@ parser.add_argument('--name', type=str, default='under_dev') # L-A: bad characte
 ### DDPM parameters
 parser.add_argument('--n_feat', type=int, default=128) # 128 ok, 256 better (but slower)
 parser.add_argument('--n_T', type=int, default=200) # 400, 500
+parser.add_argument('--guide_w', type=float, default=0.0) # 0, 0.5, 2
 
 args = parser.parse_args()
 args.device = 'cuda:' + args.device_id
+args.img_shape = (args.output_channel, args.img_size, args.img_size)
 
 def main():
     dataset_train, dataset_test = getDataset(args)
@@ -109,7 +116,7 @@ def main():
         os.makedirs(filename)
 
     if args.wandb:
-        run = wandb.init(dir=filename, project='GeFL-DDPM-fmnist-1011', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
+        run = wandb.init(dir=filename, project='GeFL-DDPMF16-1017', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
         wandb.config.update(args)
     # logger = get_logger(logpath=os.path.join(filename, 'logs'), filepath=os.path.abspath(__file__))
     
@@ -130,7 +137,6 @@ def main():
         
         for idx in idxs_users:
             dev_spec_idx = min(idx//(args.num_users//args.num_models), args.num_models-1)
-            # model_idx = random.choice(mlist[max(0,dev_spec_idx-args.min_flex_num):min(len(args.ps),dev_spec_idx+1+args.max_flex_num)])
             model_idx = dev_spec_idx
             model = local_models[model_idx]
             model.load_state_dict(ws_glob[model_idx])
@@ -144,8 +150,7 @@ def main():
         ws_glob, w_comm = FedAvg_FE(args, ws_glob, ws_local, w_comm)
         
         loss_avg = sum(loss_locals) / len(loss_locals)
-        print('Warm-up TargetNet Round {:3d}, Avg loss {:.3f}'.format
-              (iter, loss_avg))
+        print('Warm-up TargetNet Round {:3d}, Avg loss {:.3f}'.format(iter, loss_avg))
         loss_train.append(loss_avg)
         if iter % 5 == 0 or iter == args.wu_epochs:
             acc_test_tot = []
@@ -168,15 +173,14 @@ def main():
                     "Mean test accuracy": sum(acc_test_tot) / len(acc_test_tot)
                 })
 
-    # torch.save(w_comm, 'models/save/Fed' + '_'
-    #             + str(args.models) + '_common_net.pt')
+    # torch.save(w_comm, 'models/save/Fed' + '_' + str(args.models) + '_common_net.pt')
     common_net.load_state_dict(w_comm)
 
     if args.freeze_FE:
         common_net.eval()
 
-    gen_glob = DDPM(nn_model=ContextUnet(in_channels=args.output_channel, n_feat=args.n_feat, n_classes=args.num_classes),
-                    betas=(1e-4, 0.02), n_T=args.n_T, device=args.device, drop_prob=0.1).to(args.device)
+    gen_glob = DDPM(args, nn_model=ContextUnet(in_channels=args.output_channel, n_feat=args.n_feat, n_classes=args.num_classes),
+                    betas=(1e-4, 0.02), drop_prob=0.1).to(args.device)
     gen_w_glob = gen_glob.state_dict()
     
     for iter in range(1, args.gen_wu_epochs+1):
@@ -198,12 +202,17 @@ def main():
             else:
                 lr_rate = 1-iter/(args.gen_wu_epochs+args.epochs)
             g_weight, gloss = local.train(net=copy.deepcopy(gen_glob), lr_decay_rate=lr_rate)
-# 1-(self.args.local_ep*(round-1) + iter)/(self.args.local_ep*(self.args.epochs+self.args.wu_epochs))
+
             gen_w_local.append(copy.deepcopy(g_weight))
             gloss_locals.append(gloss)
         
         gen_w_glob = FedAvg(gen_w_local)
         gloss_avg = sum(gloss_locals) / len(gloss_locals)
+        if iter % args.sample_test == 0 or iter == args.gen_wu_epochs:
+            sample_num = 50
+            samples = gen_glob.sample_image_4visualization(sample_num, guide_w=args.guide_w)
+            save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
+                        'imgFedDDPMF/' + 'Feat16_'+str(args.name)+str(args.rs) + str(iter) + '.png', nrow=10)
 
         print('Warm-up Gen Round {:3d}, Average loss {:.3f}'.format(iter, gloss_avg))
 
@@ -229,15 +238,16 @@ def main():
         
         for idx in idxs_users:
             dev_spec_idx = min(idx//(args.num_users//args.num_models), args.num_models-1)
-            # model_idx = random.choice(mlist[max(0,dev_spec_idx-args.min_flex_num):min(len(args.ps),dev_spec_idx+1+args.max_flex_num)])
             model_idx = dev_spec_idx
             model = local_models[model_idx]
             model.load_state_dict(ws_glob[model_idx])
             if args.freeze_FE:
                 if args.only_gen:
+                    # update header only by synthetic data
                     local = LocalUpdate_onlyGen(args, dataset=dataset_train, idxs=dict_users[idx])
                     weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), feature_start=True, gennet=copy.deepcopy(gen_glob), learning_rate=lr)
                 else:
+                    # update header by syn+real data
                     local = LocalUpdate_header(args, dataset=dataset_train, idxs=dict_users[idx])
                     if args.aid_by_gen:
                         weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), feature_extractor=common_net, gennet=copy.deepcopy(gen_glob), learning_rate=lr)
@@ -245,6 +255,7 @@ def main():
                         weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), feature_extractor=common_net, learning_rate=lr) # weights of models
             else:
                 local = LocalUpdate(args, dataset=dataset_train, idxs=dict_users[idx])
+                # synthetic data updates header & real data updates whole target network                
                 if args.aid_by_gen:
                     weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), gennet=copy.deepcopy(gen_glob), learning_rate=lr)
                 else:
@@ -261,6 +272,13 @@ def main():
 
                 gen_w_local.append(copy.deepcopy(g_weight))
                 gloss_locals.append(gloss)
+           
+                if iter % args.sample_test == 0 or iter == args.gen_wu_epochs:
+                    sample_num = 50
+                    samples = gen_glob.sample_image_4visualization(sample_num)
+                    save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
+                                'imgFedDDPMF/' + 'Feat16_'+str(args.name)+str(args.rs) + str(iter+args.gen_wu_epochs) + '.png', nrow=10)                
+                
         if args.aid_by_gen and not args.freeze_gen:
             gloss_avg = sum(gloss_locals) / len(gloss_locals)
 

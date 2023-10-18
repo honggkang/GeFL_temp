@@ -1,23 +1,3 @@
-'''
-- 1. Main networks (including a common feature extrator (FE)) are first trained by warming up stages
-- 2. Generator is trained to generate feature (outpu by a common FE) by warming up stages
-
-Clients train main networks with local dataset
-Clients share common feature extractor and a server FedAvg feature extrator
-LOOP:
-    === Training Generator ===
-    1. Clients create intermittent features of local dataset
-    2. Clients train generator by local feature dataset and share it - FedAvg
-
-    === Training Main Net ===
-    3. Clients train main networks with local dataset and features sampled by generator
-'''
-'''
-Each client: get parameter from ws_glob and local update. Save updated parameter to ws_local
-FedAvg ws_local and save it ws_glob
-'''
-from torchvision.utils import save_image
-
 import argparse
 import os
 import wandb
@@ -27,31 +7,35 @@ import random
 import torch
 import copy
 
+import torch.utils.data
+from torch import optim
+from torch.nn import functional as F
+from torchvision import datasets, transforms
+from torchvision.utils import save_image
+
 from utils.localUpdateRaw import *
 from utils.average import *
 from utils.getData import *
 from utils.getModels import *
 
-from mlp_generators.GAN import *
-from utils.util import test_img, get_logger
+from mlp_generators.VAE import *
+from utils.util import test_img
 
 parser = argparse.ArgumentParser()
 ### clients
-parser.add_argument('--num_users', type=int, default=10)
+parser.add_argument("--num_users", type=int, default=10, help="interval between image sampling")
 parser.add_argument('--frac', type=float, default=1)
 parser.add_argument('--partial_data', type=float, default=0.1)
 ### model & feature size
 parser.add_argument('--models', type=str, default='mlp') # cnn, mlp
-parser.add_argument('--output_channel', type=int, default=1, help='channel size of image generator generates') # local epochs for training main nets by generated samples
-parser.add_argument('--img_size', type=int, default=28) # local epochs for training generator
+parser.add_argument("--output_channel", type=int, default=1, help="number of image channels")
+parser.add_argument("--img_size", type=int, default=28, help="size of each image dimension")
 ### dataset
 parser.add_argument('--dataset', type=str, default='mnist') # stl10, cifar10, svhn, mnist, fmnist
-parser.add_argument('--noniid', action='store_true') # default: false
-parser.add_argument('--dir_param', type=float, default=0.3)
 parser.add_argument('--num_classes', type=int, default=10)
 ### optimizer
 parser.add_argument('--bs', type=int, default=128)
-parser.add_argument('--local_bs', type=int, default=128)
+parser.add_argument('--local_bs', type=int, default=128) # 128
 parser.add_argument('--momentum', type=float, default=0)
 parser.add_argument('--weight_decay', type=float, default=0)
 ### reproducibility
@@ -71,40 +55,39 @@ parser.add_argument('--aid_by_gen', type=bool, default=False)
 parser.add_argument('--freeze_FE', type=bool, default=False) # N/A
 parser.add_argument('--freeze_gen', type=bool, default=False)
 parser.add_argument('--only_gen', type=bool, default=False)
-parser.add_argument('--avg_FE', type=bool, default=False)
 ### logging
-parser.add_argument('--sample_test', type=int, default=5) # local epochs for training generator
+parser.add_argument("--sample_test", type=int, default=5, help="interval between image sampling")
 parser.add_argument('--wandb', type=bool, default=True)
 parser.add_argument('--name', type=str, default='under_dev') # L-A: bad character
-### GAN parameters
-parser.add_argument("--b1", type=float, default=0.5, help="adam: decay of first order momentum of gradient")
-parser.add_argument("--b2", type=float, default=0.999, help="adam: decay of first order momentum of gradient")
-parser.add_argument('--lr', type=float, default=0.0002) # GAN lr
+### VAE parameters
+parser.add_argument("--latent_size", type=int, default=20, help="dimensionality of the latent space")
 
 args = parser.parse_args()
-args.device = 'cuda:' + args.device_id
 args.img_shape = (args.output_channel, args.img_size, args.img_size)
-args.latent_dim = 100
-args.feature_size = args.img_size
-
+args.device = 'cuda:' + args.device_id
+# cuda = True if torch.cuda.is_available() else False
+kwargs = {'num_workers': 4, 'pin_memory': True} 
 dataset_train, dataset_test = getDataset(args)
-# img_size = dataset_train[0][0].shape
+
+'''
+no normalized dataset needed for VAE
+'''
 print(args)
 def main():
-
-    if args.noniid:
-        dict_users = noniid_dir(args, args.dir_param, dataset_train)
-    else:
-        dict_users = cifar_iid(dataset_train, int(1/args.partial_data*args.num_users), args.rs)
-
-    tf = transforms.Compose([transforms.ToTensor(),transforms.Normalize([0.5], [0.5])]) # mnist is already normalised 0 to 1
+    
+    dict_users = cifar_iid(dataset_train, int(1/args.partial_data*args.num_users), args.rs)
+    
+    tf = transforms.Compose([
+                            transforms.ToTensor(),
+                            # transforms.Normalize([0.5], [0.5])
+                            ]) # mnist is already normalised 0 to 1
     train_data = datasets.MNIST(root='/home/hong/NeFL/.data/mnist', train=True, transform=tf, download=True) # VAE training data
 
     if not args.aid_by_gen:
         args.gen_wu_epochs = 0
         args.local_ep_gen = 0
         args.gen_local_ep = 0
-        
+
     local_models, common_net = getModel(args)
     w_comm = common_net.state_dict()
     ws_glob = []
@@ -116,79 +99,62 @@ def main():
     if not os.path.exists(filename):
         os.makedirs(filename)
     if args.wandb:
-        run = wandb.init(dir=filename, project='GeFL-GAN-orig-1015', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
+        run = wandb.init(dir=filename, project='GeFL-VAE-orig-1015', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
         wandb.config.update(args)
-    # logger = get_logger(logpath=os.path.join(filename, 'logs'), filepath=os.path.abspath(__file__))
-    
-    loss_train = []
-    lr = 1e-1 # MLP
 
-    gen_glob = Generator(args).to(args.device)
-    dis_glob = Discriminator(args).to(args.device)
-    gen_w_glob = gen_glob.state_dict()
-    dis_w_glob = dis_glob.state_dict()
+    loss_train = []
+    lr = 1e-1
     
+    gen_glob = CVAE(args).to(args.device)
+    gen_w_glob = gen_glob.state_dict()
+    # optim = None
     for iter in range(1, args.gen_wu_epochs+1):
         ''' ---------------------------
         Warming up for generative model
         --------------------------- '''
         gen_w_local = []
-        dis_w_local = []
         gloss_locals = []
-        dloss_locals = []
         
         m = max(int(args.frac * args.num_users), 1)
         idxs_users = np.random.choice(range(args.num_users), m, replace=False)
         
         gen_glob.load_state_dict(gen_w_glob)
-        dis_glob.load_state_dict(dis_w_glob)
         
         for idx in idxs_users:
                         
-            local = LocalUpdate_GAN_raw(args, dataset=train_data, idxs=dict_users[idx])
-            g_weight, d_weight, gloss, dloss = local.train(gnet=copy.deepcopy(gen_glob), dnet=copy.deepcopy(dis_glob))
+            local = LocalUpdate_VAE_raw(args, dataset=train_data, idxs=dict_users[idx])
+            g_weight, gloss = local.train(net=copy.deepcopy(gen_glob))
 
             gen_w_local.append(copy.deepcopy(g_weight))
-            dis_w_local.append(copy.deepcopy(d_weight))
             
             gloss_locals.append(gloss)
-            dloss_locals.append(dloss)
         
         gen_w_glob = FedAvg(gen_w_local)
-        dis_w_glob = FedAvg(dis_w_local)
         
         gloss_avg = sum(gloss_locals) / len(gloss_locals)
-        dloss_avg = sum(dloss_locals) / len(dloss_locals)
 
         if iter % args.sample_test == 0 or iter == args.gen_wu_epochs:
             sample_num = 50
             samples = gen_glob.sample_image_4visualization(sample_num)
             save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
-                        'imgFedGAN/' + 'SynOrig_' + str(iter) + '.png', nrow=10)
-        print('Warm-up GEN Round {:3d}, G Avg loss {:.3f}, D Avg loss {:.3f}'.format(iter, gloss_avg, dloss_avg))
+                        'imgFedVAE/' + 'SynOrig_' + str(iter) + '.png', nrow=10)
+        print('Warm-up GEN Round {:3d}, G Avg loss {:.3f}'.format(iter, gloss_avg))
 
     best_perf = [0 for _ in range(args.num_models)]
-
+    
     for iter in range(1, args.epochs+1):
-        ''' ----------------------------------------
-        Train main networks by local sample
-        and generated samples, then update generator
-        ---------------------------------------- '''
         ws_local = [[] for _ in range(args.num_models)]
         gen_w_local = []
-        dis_w_local = []
         
         loss_locals = []
         gen_loss_locals = []
         
         gloss_locals = []
-        dloss_locals = []
         
         m = max(int(args.frac * args.num_users), 1)
         idxs_users = np.random.choice(range(args.num_users), m, replace=False)
         if args.aid_by_gen:
             gen_glob.load_state_dict(gen_w_glob)
-            dis_glob.load_state_dict(dis_w_glob)
         
         for idx in idxs_users:
             dev_spec_idx = min(idx//(args.num_users//args.num_models), args.num_models-1)
@@ -208,39 +174,29 @@ def main():
             gen_loss_locals.append(gen_loss)
             
             if args.aid_by_gen and not args.freeze_gen: # update GEN
-                local_gen = LocalUpdate_GAN_raw(args, dataset=train_data, idxs=dict_users[idx])
-                g_weight, d_weight, gloss, dloss = local_gen.train(gnet=copy.deepcopy(gen_glob), dnet=copy.deepcopy(dis_glob))
+                local_gen = LocalUpdate_VAE_raw(args, dataset=train_data, idxs=dict_users[idx])
+                g_weight, gloss = local_gen.train(net=copy.deepcopy(gen_glob))
 
                 gen_w_local.append(copy.deepcopy(g_weight))
-                dis_w_local.append(copy.deepcopy(d_weight))
 
                 gloss_locals.append(gloss)
-                dloss_locals.append(dloss)
                 
         if args.aid_by_gen and not args.freeze_gen:
             gloss_avg = sum(gloss_locals) / len(gloss_locals)
-            dloss_avg = sum(dloss_locals) / len(dloss_locals)
             
             gen_w_glob = FedAvg(gen_w_local)
-            dis_w_glob = FedAvg(dis_w_local)
         else:
             gloss_avg = -1
             dloss_avg = -1
 
-        if args.avg_FE:
-            ws_glob, w_comm = FedAvg_FE(args, ws_glob, ws_local, w_comm) # main net, feature extractor weight update
-        else:
-            ws_glob = FedAvg_FE_raw(args, ws_glob, ws_local)
-        '''
-        FedAvg_FE: LG-FedAVG
-        FedAvg_FE_raw: FedAVG
-        '''
+        ws_glob, w_comm = FedAvg_FE(args, ws_glob, ws_local, w_comm) # main net, feature extractor weight update
+
         loss_avg = sum(loss_locals) / len(loss_locals)
         try:
             gen_loss_avg = sum(gen_loss_locals) / len(gen_loss_locals)
         except:
             gen_loss_avg = -1
-        print('Round {:3d}, Avg loss {:.3f}, Avg loss by Gen samples {:.3f}, G Avg loss {:.3f}, D Avg loss {:.3f}'.format(iter, loss_avg, gen_loss_avg, gloss_avg, dloss_avg))
+        print('Round {:3d}, Avg loss {:.3f}, Avg loss by Gen samples {:.3f}, G Avg loss {:.3f}'.format(iter, loss_avg, gen_loss_avg, gloss_avg))
 
         loss_train.append(loss_avg)
         if iter % args.sample_test == 0 or iter == args.epochs:
@@ -266,20 +222,10 @@ def main():
                     "Communication round": args.wu_epochs+iter,
                     "Mean test accuracy": sum(acc_test_tot) / len(acc_test_tot)
                 })
-                                    
-    # print(best_perf, 'AVG'+str(args.rs), sum(best_perf)/len(best_perf))
-
-    # if args.aid_by_gen:
-    #     sample_num = 10
-    #     samples = gen_glob.sample_image_4visualization(sample_num)
-    #     # sample.shape = [10, 256]
-    #     save_image(samples.view(sample_num, 1, args.feature_size, args.feature_size), 
-    #                 'imgFedCGAN/' + 'sample_' + '.png', nrow=10)
-    #     # save_image(samples.data, 'imgFedCGAN/' + 'sample_' + '.png')
 
     if args.wandb:
         run.finish()
-
+        
 
 if __name__ == "__main__":
     for i in range(args.num_experiment):
@@ -292,3 +238,126 @@ if __name__ == "__main__":
         random.seed(args.rs)
         main()
         args.rs = args.rs+1
+
+
+
+# dataloaders = []
+# for i in range(args.num_users):
+#     dataloaders.append(torch.utils.data.DataLoader(
+#         DatasetSplit(train_data,dict_users[i]), batch_size=args.batch_size, shuffle=True, **kwargs))
+    
+# # train_loader = torch.utils.data.DataLoader(
+# #     datasets.MNIST('./data', train=True, download=True,
+# #                    transform=transforms.ToTensor()),
+# #     batch_size=batch_size, shuffle=True, **kwargs)
+
+# test_loader = torch.utils.data.DataLoader(
+#     datasets.MNIST('./data', train=False,
+#                             transform=tf),
+#     batch_size=args.batch_size, shuffle=False, **kwargs)
+
+
+# def one_hot(labels, class_size):
+#     targets = torch.zeros(labels.size(0), class_size)
+#     for i, label in enumerate(labels):
+#         targets[i, label] = 1
+#     return targets.to(args.device)
+
+
+# # create a CVAE model
+# gmodel = CVAE(args).to(args.device)
+# x = torch.zeros(1,1,28,28, device='cuda') # 
+# c = torch.cuda.LongTensor((1,))
+# # summary(gmodel, x, c)
+
+# models = []
+# for i in range(args.num_users):
+#     models.append(CVAE(args).to(args.device))
+
+
+# optimizers = []
+# for i in range(args.num_users):
+#     optimizers.append(optim.Adam(models[i].parameters(), lr=1e-3))
+# # optimizer = optim.Adam(model.parameters(), lr=1e-3)
+
+# # Reconstruction + KL divergence losses summed over all elements and batch
+# def loss_function(recon_x, x, mu, logvar):
+#     BCE = F.binary_cross_entropy(recon_x.view(-1, 784), x.view(-1, 784), reduction='sum')
+#     # see Appendix B from VAE paper:
+#     # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
+#     # https://arxiv.org/abs/1312.6114
+#     # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
+#     KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp()) # logvar: log(sigma^2)
+#     return BCE + KLD
+
+
+# LongTensor = torch.cuda.LongTensor if cuda else torch.LongTensor
+
+# def train(epoch):
+#     for di in range(args.num_users):
+#         models[di].train()
+#         train_loss = 0
+#         for batch_idx, (data, labels) in enumerate(dataloaders[di]):
+#             data, labels = data.to(args.device), labels.to(args.device)
+#             # labels = one_hot(labels, 10)
+#             labels = Variable(labels.type(LongTensor))
+#             recon_batch, mu, logvar = models[di](data, labels)
+#             optimizers[di].zero_grad()
+#             loss = loss_function(recon_batch, data, mu, logvar)
+#             loss.backward()
+#             train_loss += loss.detach().cpu().numpy()
+#             optimizers[di].step()
+#             # if batch_idx % 200 == 0:
+#             #     print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+#             #         epoch, batch_idx * len(data), len(dataloaders[di].dataset),
+#             #         100. * batch_idx / len(dataloaders[di]),
+#             #         loss.item() / len(data)))
+
+#         print('====> Epoch: {} Average loss: {:.4f}'.format(
+#             epoch, train_loss / len(dataloaders[di].dataset)))
+
+#     # update global weights
+#     ws = [models[i].state_dict() for i in range(args.num_users)]
+#     wg = FedAvg(ws)
+    
+#     gmodel.load_state_dict(wg)
+#     for i in range(args.num_users):
+#         models[i].load_state_dict(wg)
+
+
+# def test(epoch):
+#     gmodel.eval()
+#     test_loss = 0
+#     with torch.no_grad():
+#         for i, (data, labels) in enumerate(test_loader):
+#             data, labels = data.to(args.device), labels.to(args.device)
+#             # labels = one_hot(labels, 10)
+#             labels = Variable(labels.type(LongTensor))
+#             recon_batch, mu, logvar = gmodel(data, labels)
+#             test_loss += loss_function(recon_batch, data, mu, logvar).detach().cpu().numpy()
+#             if i == 0:
+#                 n = min(data.size(0), 10)
+#                 comparison = torch.cat([data[:n],
+#                                       recon_batch.view(-1, 1, 28, 28)[:n]])
+#                 save_image(comparison.cpu(),
+#                          'imgFedCVAE/' + 'recon' + str(args.num_users) + '_' + str(epoch) + '.png', nrow=n)
+
+#     test_loss /= len(test_loader.dataset)
+#     print('====> Test set loss: {:.4f}'.format(test_loss))
+
+
+# for epoch in range(1, args.n_epochs + 1):
+#         train(epoch)
+#         if epoch % args.sample_interval == 0 or epoch == args.n_epochs:
+#             test(epoch)
+#             n_row = 10
+#             with torch.no_grad():
+#                 # c = torch.eye(n_row**2, 10).to(device)
+#                 c = np.array([num for _ in range(n_row) for num in range(n_row)])
+#                 c = Variable(LongTensor(c)).to(args.device)
+#                 sample = torch.randn(n_row**2, args.latent_size).to(args.device)
+#                 sample = gmodel.sample_decode(sample, c).cpu()
+#                 save_image(sample.view(n_row**2, 1, 28, 28),
+#                         'RAWimgFedCVAE/' + str(args.num_users) +'_' + str(epoch) + '.png', nrow=n_row, normalize=True)
+
+# torch.save(gmodel.state_dict(), 'models/save/' + str(args.num_users)+ '_'+ str(args.n_epochs)+ 'cvae.pt')

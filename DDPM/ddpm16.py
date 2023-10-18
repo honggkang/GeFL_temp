@@ -210,9 +210,12 @@ def ddpm_schedules(beta1, beta2, T):
     }
 
 class DDPM(nn.Module):
-    def __init__(self, nn_model, betas, n_T, device, drop_prob=0.1):
+    def __init__(self, args, nn_model, betas, drop_prob=0.1):
         super(DDPM, self).__init__()
+        device = args.device
+        n_T = args.n_T
         self.nn_model = nn_model.to(device)
+        self.args = args
 
         # register_buffer allows accessing dictionary produced by ddpm_schedules
         # e.g. can access self.sqrtab later
@@ -292,14 +295,14 @@ class DDPM(nn.Module):
         x_i_store = np.array(x_i_store)
         return x_i, x_i_store
 
-    def sample_image(self, args, guide_w = 0.0):
+    def sample_image(self, args):
         # we follow the guidance sampling scheme described in 'Classifier-Free Diffusion Guidance'
         # to make the fwd passes efficient, we concat two versions of the dataset,
         # one with context_mask=0 and the other context_mask=1
         # we then mix the outputs with the guidance scale, w
         # where w>0 means more guidance
-        size = (args.output_channel, args.img_size, args.img_size)
-
+        size = args.img_shape
+        guide_w = args.guide_w
         x_i = torch.randn(args.local_bs, *size).to(args.device)  # x_T ~ N(0, 1), sample initial noise
         c_i = torch.randint(10, (args.local_bs, )).to(self.device) # MAX_NUM, (SIZE, )
         out_c = copy.deepcopy(c_i)
@@ -344,6 +347,52 @@ class DDPM(nn.Module):
         # return x_i.view(-1, size[1]*size[2]), out_c
         return x_i, out_c
 
+
+    def sample_image_4visualization(self, sample_num, guide_w = 0.0):
+        with torch.no_grad():
+            size = self.args.img_shape
+            x_i = torch.randn(sample_num, *size).to(self.device)  # x_T ~ N(0, 1), sample initial noise
+            c_i = torch.arange(0, 10).to(self.device) # context for us just cycles throught the mnist labels
+            c_i = c_i.repeat(int(sample_num/c_i.shape[0]))
+            # don't drop context at test time
+            context_mask = torch.zeros_like(c_i).to(self.device)
+
+            # double the batch
+            c_i = c_i.repeat(2)
+            context_mask = context_mask.repeat(2)
+            context_mask[sample_num:] = 1. # makes second half of batch context free
+
+            x_i_store = [] # keep track of generated steps in case want to plot something 
+            # print()
+            for i in range(self.n_T, 0, -1):
+                # print(f'sampling timestep {i}',end='\r')
+                t_is = torch.tensor([i / self.n_T]).to(self.device)
+                t_is = t_is.repeat(sample_num,1,1,1)
+
+                # double batch
+                x_i = x_i.repeat(2,1,1,1)
+                t_is = t_is.repeat(2,1,1,1)
+
+                z = torch.randn(sample_num, *size).to(self.device) if i > 1 else 0
+
+                # split predictions and compute weighting
+                eps = self.nn_model(x_i, c_i, t_is, context_mask)
+                eps1 = eps[:sample_num]
+                eps2 = eps[sample_num:]
+                eps = (1+guide_w)*eps1 - guide_w*eps2
+                x_i = x_i[:sample_num]
+                x_i = (
+                    self.oneover_sqrta[i] * (x_i - eps * self.mab_over_sqrtmab[i])
+                    + self.sqrt_beta_t[i] * z
+                )
+                # if i%20==0 or i==self.n_T or i<8:
+                #     x_i_store.append(x_i.detach().cpu().numpy())
+            
+            # x_i_store = np.array(x_i_store)
+            # return x_i.view(-1, size[1]*size[2])
+            return x_i
+        
+        
 def train_mnist():
 
     # hardcoding these here

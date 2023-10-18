@@ -69,6 +69,6 @@ class CVAE(nn.Module):
             c = torch.randint(10, (args.local_bs, )).to(args.device) # MAX_NUM, (SIZE, )
             input = torch.cat((self.label_emb(c), z), -1)
             h3 = self.elu(self.fc3(input))
-            gen_imgs = self.sigmoid(self.fc4(h3))            
+            gen_imgs = self.sigmoid(self.fc4(h3))
             one_c = one_hot(c, args.n_classes).to(args.device)
             return gen_imgs, one_c

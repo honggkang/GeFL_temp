@@ -11,8 +11,9 @@ from modelsMNIST.GAN import *
 from modelsMNIST.VAE import *
 from modelsMNIST.DDPM import *
 
-from FeatureExtractor.mlp import *
-from FeatureExtractor.cnn3 import *
+# from FeatureExtractor.mlp import *
+# from FeatureExtractor.cnn3 import *
+from mainNetModels.cnnbn import *
 
 from utils.util import test_img
 from utils.getData import *
@@ -54,19 +55,19 @@ args = parser.parse_args()
 args.device = 'cuda:' + args.device_id
 args.img_shape = (args.channels, args.img_size, args.img_size)
 
-lr = 1e-1 # MLP
+lr = 1e-2 # MLP
 
-if args.gen == 'gan':
-    gennet = Generator(args).to(args.device)
-    gennet.load_state_dict(torch.load('models/save/F1_400gan_generator.pt'))
-elif args.gen == 'vae':
-    gennet = CVAE(args).to(args.device)
-    gennet.load_state_dict(torch.load('models/save/F1_400cvae.pt'))
-elif args.gen == 'ddpm':
-    gennet = DDPM(nn_model=ContextUnet(in_channels=1, n_feat=args.n_feat, n_classes=args.n_classes), betas=(1e-4, 0.02), n_T=400, device=args.device, drop_prob=0.1).to(args.device)
-    gennet.load_state_dict(torch.load('models/save/1_100_ddpm.pt'))
+# if args.gen == 'gan':
+#     gennet = Generator(args).to(args.device)
+#     gennet.load_state_dict(torch.load('models/save/F1_400gan_generator.pt'))
+# elif args.gen == 'vae':
+#     gennet = CVAE(args).to(args.device)
+#     gennet.load_state_dict(torch.load('models/save/F1_400cvae.pt'))
+# elif args.gen == 'ddpm':
+#     gennet = DDPM(nn_model=ContextUnet(in_channels=1, n_feat=args.n_feat, n_classes=args.n_classes), betas=(1e-4, 0.02), n_T=400, device=args.device, drop_prob=0.1).to(args.device)
+#     gennet.load_state_dict(torch.load('models/save/1_100_ddpm.pt'))
 
-net = CNN3().to(args.device)
+net = CNN2().to(args.device)
 # torchsummary.summary(net, (1,28,28))
 torchsummary.summary(net, (3,32,32))
 

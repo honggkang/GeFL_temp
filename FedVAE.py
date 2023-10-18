@@ -15,7 +15,7 @@ import numpy as np
 from modelsMNIST.VAE import *
 from utils.getData import *
 from utils.util import *
-from torchsummaryX import summary
+# from torchsummaryX import summary
 
 os.makedirs("RAWimgFedCVAE", exist_ok=True)
 
@@ -29,8 +29,8 @@ parser.add_argument("--channels", type=int, default=1, help="number of image cha
 parser.add_argument("--sample_interval", type=int, default=20, help="interval between image sampling")
 parser.add_argument('--device_id', type=str, default='0')
 
-parser.add_argument("--num_users", type=int, default=50, help="interval between image sampling")
-parser.add_argument('--partial_data', type=float, default=1)
+parser.add_argument("--num_users", type=int, default=10, help="interval between image sampling")
+parser.add_argument('--partial_data', type=float, default=0.1)
 
 opt = parser.parse_args()
 print(opt)
@@ -62,7 +62,8 @@ tf = transforms.Compose(
 train_data = datasets.MNIST(root='./data/', train=True,
                             transform=tf, download=True)
 
-dict_users = dict_iid(train_data, int(1/opt.partial_data*opt.num_users))
+# dict_users = dict_iid(train_data, int(1/opt.partial_data*opt.num_users))
+dict_users = cifar_iid(train_data, int(1/opt.partial_data*opt.num_users), 0)
 
 dataloaders = []
 for i in range(opt.num_users):
@@ -89,9 +90,9 @@ def one_hot(labels, class_size):
 
 # create a CVAE model
 gmodel = CVAE(opt).to(device)
-x = torch.zeros(1,1,28,28, device='cuda') # 
-c = torch.cuda.LongTensor((1,))
-summary(gmodel, x, c)
+# x = torch.zeros(1,1,28,28, device='cuda') # 
+# c = torch.cuda.LongTensor((1,))
+# summary(gmodel, x, c)
 
 models = []
 for i in range(opt.num_users):

@@ -11,7 +11,7 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "justMyCode": true,
-            "args": ["--aid_by_gen", "True", "--freeze_FE", "True", "--freeze_gen", "True", "--gen_wu_epochs", "100", "--epochs", "50", "--name", "A"],
+            // "args": ["--aid_by_gen", "True", "--freeze_FE", "True", "--freeze_gen", "True", "--gen_wu_epochs", "100", "--epochs", "50", "--name", "A"],
         }
     ]
 }

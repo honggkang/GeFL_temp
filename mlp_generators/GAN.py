@@ -1,6 +1,8 @@
 '''
 args.img_shape makes last linear layer to generate wished img size 
-feature/raw
+original/feature
+Conditional GAN
+https://github.com/eriklindernoren/PyTorch-GAN/blob/master/implementations/cgan/cgan.py
 '''
 import torch.nn as nn
 import torch
@@ -55,10 +57,11 @@ class Generator(nn.Module):
 
         with torch.no_grad():
             z = torch.randn((sample_num, self.args.latent_dim)).to(self.args.device)
-            labels = np.array([_ for _ in range(sample_num)])
-            labels = Variable(LongTensor(labels)).to(self.args.device)
+            # labels = np.array([_ for _ in range(sample_num)])
+            # labels = Variable(LongTensor(labels)).to(self.args.device)
+            labels = torch.arange(0,10).to(self.args.device) # context for us just cycles throught the mnist labels
+            labels = labels.repeat(int(sample_num/labels.shape[0]))
             # labels = torch.Tensor(labels).to(self.args.device)
-
             input = torch.cat((self.label_emb(labels), z), -1)
             gen_imgs = self.model(input)
             # one_c = one_hot(c, self.args.num_classes).to(self.args.device)

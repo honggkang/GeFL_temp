@@ -204,7 +204,11 @@ def loss_function(recon_x, x, mu, logvar):
     KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
     return BCE + KLD
 
+##############
+# VAE
+##############
 
+LongTensor = torch.cuda.LongTensor
 class LocalUpdate_VAE(object): # VAE
     def __init__(self, args, net_com, dataset=None, idxs=None):
         self.args = args
@@ -216,7 +220,6 @@ class LocalUpdate_VAE(object): # VAE
         net.train()
         self.feature_extractor.eval()
         # train and update
-        # optimizer = torch.optim.SGD(net.parameters(), lr=learning_rate, momentum=self.args.momentum, weight_decay=self.args.weight_decay)
         optimizer = torch.optim.Adam(net.parameters(), lr=1e-3)
         epoch_loss = []       
 
@@ -224,21 +227,25 @@ class LocalUpdate_VAE(object): # VAE
             batch_loss = []
             train_loss = 0
             for batch_idx, (images, labels) in enumerate(self.ldr_train):
-                images = images.to(self.args.device) # images.shape: torch.Size([batch_size, 1, 28, 28])
-                labels = one_hot(labels, 10).to(self.args.device)
-                images = self.feature_extractor(images) # x.view(-1, self.feature_size*self.feature_size) in CVAE.forward 
+                images, labels = images.to(self.args.device), labels.to(self.args.device) # images.shape: torch.Size([batch_size, 1, 28, 28])
+                labels = Variable(labels.type(LongTensor))
+                # labels = one_hot(labels, 10).to(self.args.device)
+                with torch.no_grad():
+                    images = self.feature_extractor(images) # x.view(-1, self.feature_size*self.feature_size) in CVAE.forward 
                 # images = images.view(-1, 1, self.args.feature_size, self.args.feature_size) # self.args.local_bs
                 # save_image(images.view(self.args.local_bs, 1, 14, 14),
                 #             'imgFedCVAE/' + 'sample_' + '.png')
                                 
                 recon_batch, mu, logvar = net(images, labels)
                 optimizer.zero_grad()
-                loss = loss_function(recon_batch, images, mu, logvar)
+                loss = loss_function(recon_batch.view(-1, int(np.prod(self.args.img_shape))), images, mu, logvar)
                 loss.backward()
                 train_loss += loss.detach().cpu().numpy()
                 optimizer.step()
                 batch_loss.append(loss.item())
-            epoch_loss.append(sum(batch_loss)/len(batch_loss))
+
+            # epoch_loss.append(sum(batch_loss)/len(batch_loss))
+            epoch_loss.append(train_loss/len(self.ldr_train.dataset))            
         return net.state_dict(), sum(epoch_loss) / len(epoch_loss)
 
 
@@ -284,7 +291,8 @@ class LocalUpdate_CCVAE(object): # VAE
                 optimizer.step()
                 train_loss += loss.detach().cpu().numpy()
                 batch_loss.append(loss.item())
-            epoch_loss.append(sum(batch_loss)/len(batch_loss))
+            # epoch_loss.append(sum(batch_loss)/len(batch_loss))
+            epoch_loss.append(train_loss/len(self.ldr_train.dataset))
         return net.state_dict(), sum(epoch_loss) / len(epoch_loss)
     
 
@@ -315,7 +323,9 @@ class LocalUpdate_DDPM(object): # DDPM
                 '''
                 images = images.to(self.args.device) # images.shape: torch.Size([batch_size, 1, 28, 28])
                 labels = labels.to(self.args.device)
-                images = self.feature_extractor(images) # x.view(-1, self.feature_size*self.feature_size) in CVAE.forward 
+                with torch.no_grad():
+                    images = self.feature_extractor(images).view(-1, self.args.output_channel, self.args.img_size, self.args.img_size)
+                # x.view(-1, self.feature_size*self.feature_size) in CVAE.forward 
                 # images = images.view(-1, self.args.output_channel, self.args.img_size, self.args.img_size)
                 # images = images.view(-1, 1, self.args.feature_size, self.args.feature_size) # self.args.local_bs
                 # save_image(images.view(self.args.local_bs, 1, 14, 14),
@@ -425,6 +435,7 @@ class LocalUpdate_GAN(object): # GAN
 
             g_epoch_loss.append(sum(g_batch_loss)/len(g_batch_loss))
             d_epoch_loss.append(sum(d_batch_loss)/len(d_batch_loss))
+
         try:
             return gnet.state_dict(), dnet.state_dict(), sum(g_epoch_loss) / len(g_epoch_loss), sum(d_epoch_loss) / len(d_epoch_loss)
         except:
@@ -438,10 +449,15 @@ class LocalUpdate_DCGAN(object): # DCGAN
         self.feature_extractor = net_com
         self.ldr_train = DataLoader(DatasetSplit(dataset, idxs), batch_size=args.local_bs, shuffle=True, drop_last=True)
         
-    def train(self, gnet, dnet):
+    def train(self, gnet, dnet, iter):
         gnet.train()
         dnet.train()
         self.feature_extractor.eval()
+
+        # if iter==30:
+        #     self.args.lr /= 10
+        # elif iter==50:
+        #     self.args.lr /= 10
 
         # train and update
         G_optimizer = torch.optim.Adam(gnet.parameters(), lr=self.args.lr, betas=(self.args.b1, self.args.b2))
@@ -498,8 +514,10 @@ class LocalUpdate_DCGAN(object): # DCGAN
                 x_, y_fill_ = Variable(x_.cuda()), Variable(y_fill_.cuda())
                 x_, y_fill_ = x_.to(self.args.device), y_fill_.to(self.args.device)
                 
-                x_ = self.feature_extractor(x_)
-
+                with torch.no_grad():
+                    x_ = self.feature_extractor(x_)
+                # save_image(x_.view(128, 1, 32, 32), 'imgFedDCGANF/' + 'sample_xx.png', nrow=10)
+                
                 D_result = dnet(x_, y_fill_).squeeze()
                 D_real_loss = BCE_loss(D_result, y_real_)
 
@@ -555,117 +573,4 @@ class LocalUpdate_DCGAN(object): # DCGAN
         try:
             return gnet.state_dict(), dnet.state_dict(), sum(g_epoch_loss) / len(g_epoch_loss), sum(d_epoch_loss) / len(d_epoch_loss)
         except:
-            return gnet.state_dict(), dnet.state_dict(), -1, -1    
-
-class LocalUpdate_GAN_raw(object): # GAN
-    def __init__(self, args, dataset=None, idxs=None):
-        self.args = args
-        self.loss_func = nn.CrossEntropyLoss()
-        self.selected_clients = []
-        self.ldr_train = DataLoader(DatasetSplit(dataset, idxs), batch_size=args.local_bs, shuffle=True, drop_last=True)
-        
-    def train(self, gnet, dnet):
-        gnet.train()
-        dnet.train()
-        # train and update
-        optimizerG = torch.optim.Adam(gnet.parameters(), lr=self.args.lr, betas=(self.args.b1, self.args.b2))
-        optimizerD = torch.optim.Adam(dnet.parameters(), lr=self.args.lr, betas=(self.args.b1, self.args.b2))
-
-        g_epoch_loss = []
-        d_epoch_loss = []
-
-        adversarial_loss = torch.nn.MSELoss()
-
-        for iter in range(self.args.local_ep):
-            g_batch_loss = []
-            # g_train_loss = 0
-            d_batch_loss = []
-            # d_train_loss = 0
-            for batch_idx, (images, labels) in enumerate(self.ldr_train):
-                batch_size = images.shape[0]
-                images = images.to(self.args.device)
-                
-                # Adversarial ground truths
-                valid = Variable(FloatTensor(batch_size, 1).fill_(1.0), requires_grad=False).to(self.args.device)
-                fake = Variable(FloatTensor(batch_size, 1).fill_(0.0), requires_grad=False).to(self.args.device)
-
-                # configure input
-                real_imgs = Variable(images.type(FloatTensor)).to(self.args.device)
-                labels = Variable(labels.type(LongTensor)).to(self.args.device)
-                
-                ''' -----------
-                Train Generator
-                ----------- '''
-                optimizerG.zero_grad()
-                
-                # Sample noise and labels as generator input
-                z = Variable(FloatTensor(np.random.normal(0, 1, (batch_size, self.args.latent_dim)))).to(self.args.device)
-                gen_labels = Variable(LongTensor(np.random.randint(0, self.args.num_classes, batch_size))).to(self.args.device)
-                
-                # Generate a batch of images
-                gen_imgs = gnet(z, gen_labels)
-                gen_imgs = gen_imgs.view(gen_imgs.size(0), *self.args.img_shape)
-                
-                # Loss measures generator's ability to fool the discriminator
-                validity = dnet(gen_imgs, gen_labels)
-                g_loss = adversarial_loss(validity, valid)
-                
-                g_loss.backward()
-                optimizerG.step()
-                
-                ''' -----------
-                Train Discriminator
-                ----------- '''
-                optimizerD.zero_grad()
-                
-                # Loss for real images
-                validity_real = dnet(real_imgs, labels)
-                d_real_loss = adversarial_loss(validity_real, valid)
-                # Loss for fake images
-                validity_fake = dnet(gen_imgs.detach(), labels) # .detach()
-                d_fake_loss = adversarial_loss(validity_fake, fake)
-                
-                d_loss = (d_real_loss + d_fake_loss) / 2
-                
-                d_loss.backward()
-                optimizerD.step()
-                
-                # g_train_loss += g_loss.detach().cpu().numpy()
-                # d_train_loss += d_loss.detach().cpu().numpy()
-                g_batch_loss.append(g_loss.item())
-                d_batch_loss.append(d_loss.item())                
-
-            g_epoch_loss.append(sum(g_batch_loss)/len(g_batch_loss))
-            d_epoch_loss.append(sum(d_batch_loss)/len(d_batch_loss))
-        return gnet.state_dict(), dnet.state_dict(), sum(g_epoch_loss) / len(g_epoch_loss), sum(d_epoch_loss) / len(d_epoch_loss)
-    
-
-class LocalUpdate_VAE_raw(object): # VAE raw
-    def __init__(self, args, dataset=None, idxs=None):
-        self.args = args
-        self.selected_clients = []
-        self.ldr_train = DataLoader(DatasetSplit(dataset, idxs), batch_size=args.local_bs, shuffle=True, drop_last=True)
-
-    def train(self, net):
-        net.train()
-        # train and update
-        # optimizer = torch.optim.SGD(net.parameters(), lr=learning_rate, momentum=self.args.momentum, weight_decay=self.args.weight_decay)
-        optimizer = torch.optim.Adam(net.parameters(), lr=1e-3)
-        epoch_loss = []       
-
-        for iter in range(self.args.local_ep):
-            batch_loss = []
-            train_loss = 0
-            for batch_idx, (images, labels) in enumerate(self.ldr_train):
-                images = images.to(self.args.device) # images.shape: torch.Size([batch_size, 1, 28, 28])
-                labels = one_hot(labels, 10).to(self.args.device)
-                                
-                recon_batch, mu, logvar = net(images, labels)
-                optimizer.zero_grad()
-                loss = loss_function(recon_batch, images.view(-1,self.args.feature_size*self.args.feature_size), mu, logvar)
-                loss.backward()
-                train_loss += loss.detach().cpu().numpy()
-                optimizer.step()
-                batch_loss.append(loss.item())
-            epoch_loss.append(sum(batch_loss)/len(batch_loss))
-        return net.state_dict(), sum(epoch_loss) / len(epoch_loss)
+            return gnet.state_dict(), dnet.state_dict(), -1, -1
