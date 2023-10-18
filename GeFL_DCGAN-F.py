@@ -78,14 +78,14 @@ parser.add_argument('--num_experiment', type=int, default=3, help="the number of
 parser.add_argument('--device_id', type=str, default='2')
 ### warming-up
 parser.add_argument('--wu_epochs', type=int, default=20) # warm-up epochs for main networks
-parser.add_argument('--gen_wu_epochs', type=int, default=50) # warm-up epochs for generator
+parser.add_argument('--gen_wu_epochs', type=int, default=100) # warm-up epochs for generator
 
 parser.add_argument('--epochs', type=int, default=50) # total communication round (train main nets by (local samples and gen) + train gen)
 parser.add_argument('--local_ep', type=int, default=5) # local epochs for training main nets by local samples
 parser.add_argument('--local_ep_gen', type=int, default=1) # local epochs for training main nets by generated samples
 parser.add_argument('--gen_local_ep', type=int, default=5) # local epochs for training generator
 
-parser.add_argument('--aid_by_gen', type=bool, default=False)
+parser.add_argument('--aid_by_gen', type=bool, default=True)
 parser.add_argument('--freeze_FE', type=bool, default=False)
 parser.add_argument('--freeze_gen', type=bool, default=False)
 parser.add_argument('--only_gen', type=bool, default=False)
@@ -93,7 +93,7 @@ parser.add_argument('--load_trained_FE', type=bool, default=False)
 
 ### logging
 parser.add_argument('--sample_test', type=int, default=5) # local epochs for training generator
-parser.add_argument('--wandb', type=bool, default=True)
+parser.add_argument('--wandb', type=bool, default=False)
 parser.add_argument('--name', type=str, default='sameSize') # L-A: bad character
 ### GAN parameters
 parser.add_argument("--b1", type=float, default=0.5, help="adam: decay of first order momentum of gradient")

@@ -44,13 +44,13 @@ parser = argparse.ArgumentParser()
 ### clients
 parser.add_argument('--num_users', type=int, default=10)
 parser.add_argument('--frac', type=float, default=1)
-parser.add_argument('--partial_data', type=float, default=0.5)
+parser.add_argument('--partial_data', type=float, default=0.1)
 ### model & feature size
-parser.add_argument('--models', type=str, default='cnn3') # cnn, mlp 
+parser.add_argument('--models', type=str, default='cnn') # cnn, mlp 
 parser.add_argument('--output_channel', type=int, default=3) # local epochs for training generator
 parser.add_argument('--img_size', type=int, default=16) # local epochs for training generator
 ### dataset
-parser.add_argument('--dataset', type=str, default='svhn') # stl10, cifar10, svhn, mnist, emnist
+parser.add_argument('--dataset', type=str, default='mnist') # stl10, cifar10, svhn, mnist, emnist
 parser.add_argument('--noniid', action='store_true') # default: false
 parser.add_argument('--dir_param', type=float, default=0.3)
 parser.add_argument('--num_classes', type=int, default=10)
@@ -65,15 +65,15 @@ parser.add_argument('--rs', type=int, default=0)
 parser.add_argument('--num_experiment', type=int, default=3, help="the number of experiments")
 parser.add_argument('--device_id', type=str, default='1')
 ### warming-up
-parser.add_argument('--wu_epochs', type=int, default=50) # warm-up epochs for main networks
-parser.add_argument('--gen_wu_epochs', type=int, default=50) # warm-up epochs for generator
+parser.add_argument('--wu_epochs', type=int, default=20) # warm-up epochs for main networks
+parser.add_argument('--gen_wu_epochs', type=int, default=100) # warm-up epochs for generator
 
 parser.add_argument('--epochs', type=int, default=50)
 parser.add_argument('--local_ep', type=int, default=5)
 parser.add_argument('--local_ep_gen', type=int, default=1) # local epochs for training main nets by generated samples
 parser.add_argument('--gen_local_ep', type=int, default=5) # local epochs for training generator
 
-parser.add_argument('--aid_by_gen', type=bool, default=False)
+parser.add_argument('--aid_by_gen', type=bool, default=True)
 parser.add_argument('--freeze_FE', type=bool, default=False)
 parser.add_argument('--freeze_gen', type=bool, default=False)
 parser.add_argument('--only_gen', type=bool, default=False)
@@ -86,7 +86,7 @@ parser.add_argument('--name', type=str, default='under_dev') # L-A: bad characte
 ### VAE parameters
 parser.add_argument('--latent_size', type=int, default=16) # local epochs for training generator
 ### target nets
-parser.add_argument('--lr', type=float, default=1e-2)
+parser.add_argument('--lr', type=float, default=1e-1)
 
 args = parser.parse_args()
 args.device = 'cuda:' + args.device_id
@@ -217,6 +217,7 @@ def main():
                         'imgFedCVAEF/' + 'Feat16_' +str(args.name)+str(args.rs)+str(iter) + '.png', nrow=10)
         print('Warm-up Gen Round {:3d}, CVAE Average loss {:.3f}'.format(iter, loss_avg))
 
+    torch.save(gen_w_glob, 'checkpoint/FedCVAEF.pt')
     best_perf = [0 for _ in range(args.num_models)]
 
     for iter in range(1,args.epochs+1):
