@@ -92,8 +92,7 @@ train_data = datasets.MNIST(root='./data/', train=True,
                                 [transforms.ToTensor(),
                                 #  transforms.Resize(opt.img_size),
                                  transforms.Normalize([0.5], [0.5])
-                                ]
-                            ), download=True)
+                                ]), download=True)
 
 dict_users = dict_iid(train_data, int(1/opt.partial_data*opt.num_users))
 

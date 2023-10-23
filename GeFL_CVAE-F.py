@@ -46,7 +46,7 @@ parser.add_argument('--num_users', type=int, default=10)
 parser.add_argument('--frac', type=float, default=1)
 parser.add_argument('--partial_data', type=float, default=0.1)
 ### model & feature size
-parser.add_argument('--models', type=str, default='cnn') # cnn, mlp 
+parser.add_argument('--models', type=str, default='cnn') # cnn, mlp / cnn3
 parser.add_argument('--output_channel', type=int, default=3) # local epochs for training generator
 parser.add_argument('--img_size', type=int, default=16) # local epochs for training generator
 ### dataset
@@ -66,27 +66,30 @@ parser.add_argument('--num_experiment', type=int, default=3, help="the number of
 parser.add_argument('--device_id', type=str, default='1')
 ### warming-up
 parser.add_argument('--wu_epochs', type=int, default=20) # warm-up epochs for main networks
-parser.add_argument('--gen_wu_epochs', type=int, default=100) # warm-up epochs for generator
+parser.add_argument('--gen_wu_epochs', type=int, default=50) # warm-up epochs for generator
 
 parser.add_argument('--epochs', type=int, default=50)
 parser.add_argument('--local_ep', type=int, default=5)
 parser.add_argument('--local_ep_gen', type=int, default=1) # local epochs for training main nets by generated samples
 parser.add_argument('--gen_local_ep', type=int, default=5) # local epochs for training generator
 
-parser.add_argument('--aid_by_gen', type=bool, default=True)
+parser.add_argument('--aid_by_gen', type=bool, default=False)
 parser.add_argument('--freeze_FE', type=bool, default=False)
 parser.add_argument('--freeze_gen', type=bool, default=False)
 parser.add_argument('--only_gen', type=bool, default=False)
 parser.add_argument('--load_trained_FE', type=bool, default=False)
-
+parser.add_argument('--cg_pruning', type=bool, default=True)
 ### logging
 parser.add_argument('--sample_test', type=int, default=5) # local epochs for training generator
-parser.add_argument('--wandb', type=bool, default=False)
+parser.add_argument('--wandb', type=bool, default=True)
 parser.add_argument('--name', type=str, default='under_dev') # L-A: bad character
 ### VAE parameters
 parser.add_argument('--latent_size', type=int, default=16) # local epochs for training generator
 ### target nets
 parser.add_argument('--lr', type=float, default=1e-1)
+### cgscore pruning
+parser.add_argument('--pruning_ratio', type=float, default=0.2)
+parser.add_argument('--from_low', default=True, help='True: prunes low score')
 
 args = parser.parse_args()
 args.device = 'cuda:' + args.device_id
@@ -117,7 +120,7 @@ def main():
         os.makedirs(filename)
 
     if args.wandb:
-        run = wandb.init(dir=filename, project='GeFL-CVAEF16-1017', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
+        run = wandb.init(dir=filename, project='GeFL-CVAEF16-1019', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
         wandb.config.update(args)
     # logger = get_logger(logpath=os.path.join(filename, 'logs'), filepath=os.path.abspath(__file__))
     
@@ -248,15 +251,15 @@ def main():
                     local = LocalUpdate_onlyGen(args, dataset=dataset_train, idxs=dict_users[idx])
                     weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), feature_start=True, gennet=copy.deepcopy(gen_glob), learning_rate=lr)
                 else:
-                    local = LocalUpdate_header(args, dataset=dataset_train, idxs=dict_users[idx])
+                    local = LocalUpdate_header_cg(args, dataset=dataset_train, idxs=dict_users[idx])
                     if args.aid_by_gen:
-                        weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), feature_extractor=common_net, gennet=copy.deepcopy(gen_glob), learning_rate=lr)
+                        weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), feature_extractor=common_net, gennet=copy.deepcopy(gen_glob), cg=args.cg_pruning, learning_rate=lr)
                     else:
                         weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), feature_extractor=common_net, learning_rate=lr) # weights of models
             else:
-                local = LocalUpdate(args, dataset=dataset_train, idxs=dict_users[idx])
+                local = LocalUpdate_cg(args, dataset=dataset_train, idxs=dict_users[idx])
                 if args.aid_by_gen:
-                    weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), gennet=copy.deepcopy(gen_glob), learning_rate=lr)
+                    weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), gennet=copy.deepcopy(gen_glob), cg=args.cg_pruning, learning_rate=lr)
                 else:
                     weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), learning_rate=lr)
 

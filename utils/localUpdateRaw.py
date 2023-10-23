@@ -43,7 +43,7 @@ class LocalUpdate(object):
         
                 for i in range(self.iter):
                     with torch.no_grad():
-                        images, labels = gennet.sample_image(self.args) # images.shape (bs, feature^2)
+                        images, labels = gennet.sample_image(self.args, sample_num=self.args.local_bs) # images.shape (bs, feature^2)
                     net.zero_grad()
                     logits, log_probs = net(images)
                     loss = F.cross_entropy(logits, labels) # net.fc1.weight.grad / net.fc5.weight.grad
@@ -90,14 +90,18 @@ class LocalUpdate_GAN_raw(object): # GAN
         self.args = args
         self.loss_func = nn.CrossEntropyLoss()
         self.selected_clients = []
-        self.ldr_train = DataLoader(DatasetSplit(dataset, idxs), batch_size=args.local_bs, shuffle=True, drop_last=True)
+        self.ldr_train = DataLoader(DatasetSplit(dataset, idxs), batch_size=args.local_bs, shuffle=True) # , drop_last=True
         
-    def train(self, gnet, dnet):
+    def train(self, gnet, dnet, optg=None, optd=None):
         gnet.train()
         dnet.train()
         # train and update
         optimizerG = torch.optim.Adam(gnet.parameters(), lr=self.args.lr, betas=(self.args.b1, self.args.b2))
         optimizerD = torch.optim.Adam(dnet.parameters(), lr=self.args.lr, betas=(self.args.b1, self.args.b2))
+        if optg:
+            optimizerG.load_state_dict(optg)
+        if optd:
+            optimizerD.load_state_dict(optd)
 
         g_epoch_loss = []
         d_epoch_loss = []
@@ -167,7 +171,7 @@ class LocalUpdate_GAN_raw(object): # GAN
             d_epoch_loss.append(sum(d_batch_loss)/len(d_batch_loss))
 
         try:
-            return gnet.state_dict(), dnet.state_dict(), sum(g_epoch_loss) / len(g_epoch_loss), sum(d_epoch_loss) / len(d_epoch_loss)
+            return gnet.state_dict(), dnet.state_dict(), sum(g_epoch_loss) / len(g_epoch_loss), sum(d_epoch_loss) / len(d_epoch_loss), optimizerG.state_dict(), optimizerD.state_dict() 
         except:
             return gnet.state_dict(), dnet.state_dict(), -1, -1
 
@@ -183,7 +187,7 @@ def one_hot(labels, class_size):
 
 # Reconstruction + KL divergence losses summed over all elements and batch
 def loss_function(recon_x, x, mu, logvar):
-    BCE = F.binary_cross_entropy(recon_x, x, reduction='sum')
+    BCE = F.binary_cross_entropy(recon_x.view(-1, 784), x.view(-1, 784), reduction='sum')
     # see Appendix B from VAE paper:
     # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
     # https://arxiv.org/abs/1312.6114
@@ -195,35 +199,36 @@ class LocalUpdate_VAE_raw(object): # VAE raw
     def __init__(self, args, dataset=None, idxs=None):
         self.args = args
         self.selected_clients = []
-        self.ldr_train = DataLoader(DatasetSplit(dataset, idxs), batch_size=args.local_bs, shuffle=True, drop_last=True)
+        self.ldr_train = DataLoader(DatasetSplit(dataset, idxs), batch_size=args.local_bs, shuffle=True)
 
-    def train(self, net):
+    def train(self, net, opt=None):
         net.train()
         # train and update
         optimizer = torch.optim.Adam(net.parameters(), lr=1e-3)
+        if opt:
+            optimizer.load_state_dict(opt)
         # if optim:
         #     optimizer.load_state_dict(optim)
         epoch_loss = []       
 
-        for iter in range(self.args.local_ep):
+        for iter in range(self.args.gen_local_ep):
             batch_loss = []
             train_loss = 0
             for batch_idx, (images, labels) in enumerate(self.ldr_train):
                 images, labels = images.to(self.args.device), labels.to(self.args.device) # images.shape: torch.Size([batch_size, 1, 28, 28])
                 labels = Variable(labels.type(LongTensor))
                 # labels = one_hot(labels, 10).to(self.args.device)
-                                
                 recon_batch, mu, logvar = net(images, labels)
                 optimizer.zero_grad()
                 loss = loss_function(recon_batch, images, mu, logvar)
                 loss.backward()
                 train_loss += loss.detach().cpu().numpy()
                 optimizer.step()
-                batch_loss.append(loss.item())
                 
+                batch_loss.append(loss.item())
             # epoch_loss.append(sum(batch_loss)/len(batch_loss))
             epoch_loss.append(train_loss/len(self.ldr_train.dataset))
-        return net.state_dict(), sum(epoch_loss) / len(epoch_loss) #, optimizer.state_dict()
+        return net.state_dict(), sum(epoch_loss) / len(epoch_loss), optimizer.state_dict()
 
 ##########################################
 #                  DDPM                  #
@@ -242,7 +247,7 @@ class LocalUpdate_DDPM_raw(object): # DDPM
         optim = torch.optim.Adam(net.parameters(), lr=1e-4)
         epoch_loss = []
 
-        for iter in range(self.args.local_ep):
+        for iter in range(self.args.gen_local_ep):
             optim.param_groups[0]['lr'] = self.lr*lr_decay_rate
             # (1-(self.args.local_ep*(round-1) + iter)/(self.args.local_ep*(self.args.epochs+self.args.wu_epochs)))
             loss_ema = None
@@ -262,7 +267,7 @@ class LocalUpdate_DDPM_raw(object): # DDPM
                 if loss_ema is None:
                     loss_ema = loss.item()
                 else:
-                    loss_ema = 0.95 * loss_ema + 0.05 * loss.item()                
+                    loss_ema = 0.95 * loss_ema + 0.05 * loss.item()
                 optim.step()
 
                 batch_loss.append(loss_ema)

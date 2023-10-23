@@ -56,11 +56,11 @@ class CVAE(nn.Module):
         z = self.reparameterize(mu, logvar)
         return self.decode(z, c), mu, logvar
     
-    def sample_image(self, args):
+    def sample_image(self, args, sample_num=0):
         with torch.no_grad():
-            z = torch.randn((args.local_bs, self.latent_size)).to(args.device)
+            z = torch.randn((sample_num, self.latent_size)).to(args.device)
             # c = 0 # 0 ~ 9 randint
-            c = torch.randint(10, (args.local_bs, )).to(args.device) # MAX_NUM, (SIZE, )
+            c = torch.randint(10, (sample_num, )).to(args.device) # MAX_NUM, (SIZE, )
             input = torch.cat((self.label_emb(c), z), -1)
             h3 = self.elu(self.fc3(input))
             gen_imgs = self.sigmoid(self.fc4(h3))

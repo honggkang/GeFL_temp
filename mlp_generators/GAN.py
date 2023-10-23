@@ -40,11 +40,11 @@ class Generator(nn.Module):
         # img = img.view(img.size(0), *img_shape)
         return img
     
-    def sample_image(self, args):
+    def sample_image(self, args, sample_num=0):
         with torch.no_grad():
             # z = Variable(FloatTensor(np.random.normal(0, 1, (n_row ** 2, opt.latent_dim))))
-            z = torch.randn((args.local_bs, args.latent_dim)).to(args.device)
-            c = torch.randint(10, (args.local_bs, )).to(args.device) # MAX_NUM, (SIZE, )
+            z = torch.randn((sample_num, args.latent_dim)).to(args.device)
+            c = torch.randint(10, (sample_num, )).to(args.device) # MAX_NUM, (SIZE, )
             input = torch.cat((self.label_emb(c), z), -1)
             gen_imgs = self.model(input)
             one_c = one_hot(c, args.num_classes).to(args.device)

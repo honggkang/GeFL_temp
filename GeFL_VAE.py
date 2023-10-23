@@ -34,8 +34,8 @@ parser.add_argument("--img_size", type=int, default=28, help="size of each image
 parser.add_argument('--dataset', type=str, default='mnist') # stl10, cifar10, svhn, mnist, fmnist
 parser.add_argument('--num_classes', type=int, default=10)
 ### optimizer
-parser.add_argument('--bs', type=int, default=128)
-parser.add_argument('--local_bs', type=int, default=128) # 128
+parser.add_argument('--bs', type=int, default=64)
+parser.add_argument('--local_bs', type=int, default=64) # 128
 parser.add_argument('--momentum', type=float, default=0)
 parser.add_argument('--weight_decay', type=float, default=0)
 ### reproducibility
@@ -44,20 +44,20 @@ parser.add_argument('--num_experiment', type=int, default=3, help="the number of
 parser.add_argument('--device_id', type=str, default='0')
 ### warming-up
 parser.add_argument('--wu_epochs', type=int, default=0) # warm-up epochs for main networks
-parser.add_argument('--gen_wu_epochs', type=int, default=50) # warm-up epochs for generator
+parser.add_argument('--gen_wu_epochs', type=int, default=400) # warm-up epochs for generator
 
 parser.add_argument('--epochs', type=int, default=50) # total communication round (train main nets by (local samples and gen) + train gen)
 parser.add_argument('--local_ep', type=int, default=5) # local epochs for training main nets by local samples
 parser.add_argument('--local_ep_gen', type=int, default=1) # local epochs for training main nets by generated samples
-parser.add_argument('--gen_local_ep', type=int, default=5) # local epochs for training generator
+parser.add_argument('--gen_local_ep', type=int, default=1) # local epochs for training generator
 
-parser.add_argument('--aid_by_gen', type=bool, default=False)
+parser.add_argument('--aid_by_gen', type=bool, default=True)
 parser.add_argument('--freeze_FE', type=bool, default=False) # N/A
 parser.add_argument('--freeze_gen', type=bool, default=False)
 parser.add_argument('--only_gen', type=bool, default=False)
 ### logging
-parser.add_argument("--sample_test", type=int, default=5, help="interval between image sampling")
-parser.add_argument('--wandb', type=bool, default=True)
+parser.add_argument("--sample_test", type=int, default=10, help="interval between image sampling")
+parser.add_argument('--wandb', type=bool, default=False)
 parser.add_argument('--name', type=str, default='under_dev') # L-A: bad character
 ### VAE parameters
 parser.add_argument("--latent_size", type=int, default=20, help="dimensionality of the latent space")
@@ -74,15 +74,14 @@ no normalized dataset needed for VAE
 '''
 print(args)
 def main():
-    
-    dict_users = cifar_iid(dataset_train, int(1/args.partial_data*args.num_users), args.rs)
-    
+        
     tf = transforms.Compose([
                             transforms.ToTensor(),
                             # transforms.Normalize([0.5], [0.5])
                             ]) # mnist is already normalised 0 to 1
     train_data = datasets.MNIST(root='/home/hong/NeFL/.data/mnist', train=True, transform=tf, download=True) # VAE training data
-
+    dict_users = cifar_iid(train_data, int(1/args.partial_data*args.num_users), args.rs)
+    
     if not args.aid_by_gen:
         args.gen_wu_epochs = 0
         args.local_ep_gen = 0
@@ -107,6 +106,10 @@ def main():
     
     gen_glob = CVAE(args).to(args.device)
     gen_w_glob = gen_glob.state_dict()
+    
+    opt = torch.optim.Adam(gen_glob.parameters(), lr=1e-3).state_dict()
+    opts = [copy.deepcopy(opt) for _ in range(args.num_users)]
+
     # optim = None
     for iter in range(1, args.gen_wu_epochs+1):
         ''' ---------------------------
@@ -117,29 +120,32 @@ def main():
         
         m = max(int(args.frac * args.num_users), 1)
         idxs_users = np.random.choice(range(args.num_users), m, replace=False)
-        
         gen_glob.load_state_dict(gen_w_glob)
         
         for idx in idxs_users:
-                        
+
             local = LocalUpdate_VAE_raw(args, dataset=train_data, idxs=dict_users[idx])
-            g_weight, gloss = local.train(net=copy.deepcopy(gen_glob))
+            if iter == 1:
+                model = CVAE(args).to(args.device)
+                opt = torch.optim.Adam(model.parameters(), lr=1e-3).state_dict()
+                g_weight, gloss, opts[idx] = local.train(net=model, opt=opt) # Different model initialization at the first
+            else:
+                g_weight, gloss, opts[idx] = local.train(net=copy.deepcopy(gen_glob), opt=opts[idx])
 
             gen_w_local.append(copy.deepcopy(g_weight))
-            
             gloss_locals.append(gloss)
         
         gen_w_glob = FedAvg(gen_w_local)
-        
         gloss_avg = sum(gloss_locals) / len(gloss_locals)
 
         if iter % args.sample_test == 0 or iter == args.gen_wu_epochs:
-            sample_num = 50
+            sample_num = 100
             samples = gen_glob.sample_image_4visualization(sample_num)
             save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
-                        'imgFedVAE/' + 'SynOrig_' + str(iter) + '.png', nrow=10)
+                        'imgFedVAE/' + 'SynOrig_' + str(iter) + '.png', nrow=10, normalize=True)
         print('Warm-up GEN Round {:3d}, G Avg loss {:.3f}'.format(iter, gloss_avg))
 
+    torch.save(gen_w_glob, 'checkpoint/FedVAE.pt')
     best_perf = [0 for _ in range(args.num_models)]
     
     for iter in range(1, args.epochs+1):

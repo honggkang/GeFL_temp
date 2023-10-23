@@ -50,8 +50,8 @@ parser.add_argument('--noniid', action='store_true') # default: false
 parser.add_argument('--dir_param', type=float, default=0.3)
 parser.add_argument('--num_classes', type=int, default=10)
 ### optimizer
-parser.add_argument('--bs', type=int, default=128)
-parser.add_argument('--local_bs', type=int, default=128)
+parser.add_argument('--bs', type=int, default=64)
+parser.add_argument('--local_bs', type=int, default=64)
 parser.add_argument('--momentum', type=float, default=0)
 parser.add_argument('--weight_decay', type=float, default=0)
 ### reproducibility
@@ -60,31 +60,31 @@ parser.add_argument('--num_experiment', type=int, default=3, help="the number of
 parser.add_argument('--device_id', type=str, default='0')
 ### warming-up
 parser.add_argument('--wu_epochs', type=int, default=0) # warm-up epochs for main networks
-parser.add_argument('--gen_wu_epochs', type=int, default=50) # warm-up epochs for generator
+parser.add_argument('--gen_wu_epochs', type=int, default=400) # warm-up epochs for generator
 
 parser.add_argument('--epochs', type=int, default=50) # total communication round (train main nets by (local samples and gen) + train gen)
 parser.add_argument('--local_ep', type=int, default=5) # local epochs for training main nets by local samples
 parser.add_argument('--local_ep_gen', type=int, default=1) # local epochs for training main nets by generated samples
-parser.add_argument('--gen_local_ep', type=int, default=5) # local epochs for training generator
+parser.add_argument('--gen_local_ep', type=int, default=1) # local epochs for training generator
 
-parser.add_argument('--aid_by_gen', type=bool, default=False)
+parser.add_argument('--aid_by_gen', type=bool, default=True)
 parser.add_argument('--freeze_FE', type=bool, default=False) # N/A
 parser.add_argument('--freeze_gen', type=bool, default=False)
 parser.add_argument('--only_gen', type=bool, default=False)
 parser.add_argument('--avg_FE', type=bool, default=False)
 ### logging
 parser.add_argument('--sample_test', type=int, default=5) # local epochs for training generator
-parser.add_argument('--wandb', type=bool, default=True)
+parser.add_argument('--wandb', type=bool, default=False)
 parser.add_argument('--name', type=str, default='under_dev') # L-A: bad character
 ### GAN parameters
 parser.add_argument("--b1", type=float, default=0.5, help="adam: decay of first order momentum of gradient")
 parser.add_argument("--b2", type=float, default=0.999, help="adam: decay of first order momentum of gradient")
 parser.add_argument('--lr', type=float, default=0.0002) # GAN lr
+parser.add_argument('--latent_dim', type=int, default=100)
 
 args = parser.parse_args()
 args.device = 'cuda:' + args.device_id
 args.img_shape = (args.output_channel, args.img_size, args.img_size)
-args.latent_dim = 100
 args.feature_size = args.img_size
 
 dataset_train, dataset_test = getDataset(args)
@@ -125,6 +125,15 @@ def main():
 
     gen_glob = Generator(args).to(args.device)
     dis_glob = Discriminator(args).to(args.device)
+    
+    # optgs , optds = [], []
+    
+    optg = torch.optim.Adam(gen_glob.parameters(), lr=args.lr, betas=(args.b1, args.b2)).state_dict()
+    optd = torch.optim.Adam(dis_glob.parameters(), lr=args.lr, betas=(args.b1, args.b2)).state_dict()
+ 
+    optgs = [copy.deepcopy(optg) for _ in range(args.num_users)]
+    optds = [copy.deepcopy(optd) for _ in range(args.num_users)]
+
     gen_w_glob = gen_glob.state_dict()
     dis_w_glob = dis_glob.state_dict()
     
@@ -146,7 +155,7 @@ def main():
         for idx in idxs_users:
                         
             local = LocalUpdate_GAN_raw(args, dataset=train_data, idxs=dict_users[idx])
-            g_weight, d_weight, gloss, dloss = local.train(gnet=copy.deepcopy(gen_glob), dnet=copy.deepcopy(dis_glob))
+            g_weight, d_weight, gloss, dloss, optgs[idx], optds[idx] = local.train(gnet=copy.deepcopy(gen_glob), dnet=copy.deepcopy(dis_glob), optg=optgs[idx], optd=optds[idx])
 
             gen_w_local.append(copy.deepcopy(g_weight))
             dis_w_local.append(copy.deepcopy(d_weight))
@@ -161,11 +170,13 @@ def main():
         dloss_avg = sum(dloss_locals) / len(dloss_locals)
 
         if iter % args.sample_test == 0 or iter == args.gen_wu_epochs:
-            sample_num = 50
+            sample_num = 100
             samples = gen_glob.sample_image_4visualization(sample_num)
             save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
                         'imgFedGAN/' + 'SynOrig_' + str(iter) + '.png', nrow=10)
         print('Warm-up GEN Round {:3d}, G Avg loss {:.3f}, D Avg loss {:.3f}'.format(iter, gloss_avg, dloss_avg))
+        
+    torch.save(gen_w_glob, 'checkpoint/FedGAN.pt')
 
     best_perf = [0 for _ in range(args.num_models)]
 
@@ -209,7 +220,8 @@ def main():
             
             if args.aid_by_gen and not args.freeze_gen: # update GEN
                 local_gen = LocalUpdate_GAN_raw(args, dataset=train_data, idxs=dict_users[idx])
-                g_weight, d_weight, gloss, dloss = local_gen.train(gnet=copy.deepcopy(gen_glob), dnet=copy.deepcopy(dis_glob))
+                # g_weight, d_weight, gloss, dloss = local_gen.train(gnet=copy.deepcopy(gen_glob), dnet=copy.deepcopy(dis_glob))
+                g_weight, d_weight, gloss, dloss, optgs[idx], optds[idx] = local_gen.train(gnet=copy.deepcopy(gen_glob), dnet=copy.deepcopy(dis_glob), optg=optgs[idx], optd=optds[idx])
 
                 gen_w_local.append(copy.deepcopy(g_weight))
                 dis_w_local.append(copy.deepcopy(d_weight))

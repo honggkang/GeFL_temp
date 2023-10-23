@@ -61,32 +61,32 @@ parser.add_argument('--rs', type=int, default=0)
 parser.add_argument('--num_experiment', type=int, default=3, help="the number of experiments")
 parser.add_argument('--device_id', type=str, default='0')
 ### warming-up
-parser.add_argument('--wu_epochs', type=int, default=50) # warm-up epochs
-parser.add_argument('--gen_wu_epochs', type=int, default=50) # warm-up epochs
+parser.add_argument('--wu_epochs', type=int, default=50) # warm-up epochs N/A
+parser.add_argument('--gen_wu_epochs', type=int, default=100) # warm-up epochs
 
 parser.add_argument('--epochs', type=int, default=50)
 parser.add_argument('--local_ep', type=int, default=5)
 parser.add_argument('--local_ep_gen', type=int, default=1)
 parser.add_argument('--gen_local_ep', type=int, default=5)
 
-parser.add_argument('--aid_by_gen', type=bool, default=False)
+parser.add_argument('--aid_by_gen', type=bool, default=True)
 parser.add_argument('--freeze_FE', type=bool, default=False)
 parser.add_argument('--freeze_gen', type=bool, default=False)
 parser.add_argument('--only_gen', type=bool, default=False)
 ### logging
 parser.add_argument('--sample_test', type=int, default=10) # local epochs for training generator
-parser.add_argument('--wandb', type=bool, default=True)
+parser.add_argument('--wandb', type=bool, default=False)
 parser.add_argument('--name', type=str, default='under_dev') # L-A: bad character
 ### DDPM parameters
 parser.add_argument('--n_feat', type=int, default=128) # 128 ok, 256 better (but slower)
-parser.add_argument('--n_T', type=int, default=100) # 400, 500
+parser.add_argument('--n_T', type=int, default=200) # 400, 500
 parser.add_argument('--guide_w', type=float, default=0.0) # 0, 0.5, 2
 
 args = parser.parse_args()
 args.device = 'cuda:' + args.device_id
 args.img_shape = (args.output_channel, args.img_size, args.img_size)
 
-tf = transforms.Compose([transforms.ToTensor()]) # mnist is already normalised 0 to 1
+tf = transforms.Compose([transforms.ToTensor(),]) # mnist is already normalised 0 to 1
 train_data = datasets.MNIST(root='/home/hong/NeFL/.data/mnist', train=True, transform=tf, download=True) # VAE training data
 
 def main():
@@ -129,6 +129,7 @@ def main():
     for iter in range(1, args.gen_wu_epochs+1):
         ''' ---------------------------
         Warming up for generative model
+        args.aid_by_gen == True
         --------------------------- '''
         gen_w_local = []
         gloss_locals = []
@@ -158,6 +159,8 @@ def main():
             save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
                         'imgFedDDPM/' + 'SynOrig28_' + str(iter) + '.png', nrow=10)
         print('Warm-up GEN Round {:3d}, G Avg loss {:.3f}'.format(iter, gloss_avg))
+
+    torch.save(gen_w_glob, 'checkpoint/FedDDPM.pt')
 
     best_perf = [0 for _ in range(args.num_models)]
 
