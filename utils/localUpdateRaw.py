@@ -78,6 +78,46 @@ class LocalUpdate(object):
 
         return net.state_dict(), sum(epoch_loss) / len(epoch_loss), gen_loss
 
+
+class LocalUpdate_onlyGen(object):
+    def __init__(self, args, dataset=None, idxs=None):
+        self.args = args
+        self.loss_func = nn.CrossEntropyLoss()
+        self.selected_clients = []
+        self.ldr_train = DataLoader(DatasetSplit(dataset, idxs), batch_size=args.local_bs, shuffle=True)
+        self.iter = len(idxs)//args.local_bs
+        
+    def train(self, net, learning_rate, gennet=None):
+        net.train()
+
+        optimizer = torch.optim.SGD(net.parameters(), lr=learning_rate, momentum=self.args.momentum, weight_decay=self.args.weight_decay)
+        gen_epoch_loss = None
+        gen_loss = None
+        if gennet:
+            gen_epoch_loss = []
+            gennet.eval()
+            # print('gen sample iteration',self.iter)
+            for iter in range(self.args.local_ep): # Enough local epochs for synthetic data
+                gen_batch_loss = []
+        
+                for i in range(self.iter):
+                    with torch.no_grad():
+                        images, labels = gennet.sample_image(self.args, sample_num=self.args.local_bs) # images.shape (bs, feature^2)
+                    net.zero_grad()
+                    logits, log_probs = net(images)
+                    loss = F.cross_entropy(logits, labels) # net.fc1.weight.grad / net.fc5.weight.grad
+                    optimizer.zero_grad()
+                    loss.backward()
+                    optimizer.step()
+
+                    gen_batch_loss.append(loss.item())
+                gen_epoch_loss.append(sum(gen_batch_loss)/len(gen_batch_loss))     
+            # gennet creates feature samples (gennet(, labels))
+            if gen_epoch_loss:
+                gen_loss = sum(gen_epoch_loss) / len(gen_epoch_loss)
+            
+        return net.state_dict(), -1, gen_loss
+
 ##########################################
 #                   GAN                  #
 ##########################################
@@ -107,8 +147,8 @@ class LocalUpdate_GAN_raw(object): # GAN
         d_epoch_loss = []
 
         adversarial_loss = torch.nn.MSELoss()
-
-        for iter in range(self.args.local_ep):
+        # torch.nn.CrossEntropyLoss()
+        for iter in range(self.args.gen_local_ep):
             g_batch_loss = []
             # g_train_loss = 0
             d_batch_loss = []
@@ -198,7 +238,6 @@ def loss_function(recon_x, x, mu, logvar):
 class LocalUpdate_VAE_raw(object): # VAE raw
     def __init__(self, args, dataset=None, idxs=None):
         self.args = args
-        self.selected_clients = []
         self.ldr_train = DataLoader(DatasetSplit(dataset, idxs), batch_size=args.local_bs, shuffle=True)
 
     def train(self, net, opt=None):
@@ -212,7 +251,7 @@ class LocalUpdate_VAE_raw(object): # VAE raw
         epoch_loss = []       
 
         for iter in range(self.args.gen_local_ep):
-            batch_loss = []
+            # batch_loss = []
             train_loss = 0
             for batch_idx, (images, labels) in enumerate(self.ldr_train):
                 images, labels = images.to(self.args.device), labels.to(self.args.device) # images.shape: torch.Size([batch_size, 1, 28, 28])
@@ -225,7 +264,7 @@ class LocalUpdate_VAE_raw(object): # VAE raw
                 train_loss += loss.detach().cpu().numpy()
                 optimizer.step()
                 
-                batch_loss.append(loss.item())
+                # batch_loss.append(loss.item())
             # epoch_loss.append(sum(batch_loss)/len(batch_loss))
             epoch_loss.append(train_loss/len(self.ldr_train.dataset))
         return net.state_dict(), sum(epoch_loss) / len(epoch_loss), optimizer.state_dict()
@@ -237,14 +276,15 @@ class LocalUpdate_VAE_raw(object): # VAE raw
 class LocalUpdate_DDPM_raw(object): # DDPM
     def __init__(self, args, dataset=None, idxs=None):
         self.args = args
-        self.selected_clients = []
-        self.ldr_train = tqdm(DataLoader(DatasetSplit(dataset, idxs), batch_size=args.local_bs, shuffle=True, drop_last=True))
+        self.ldr_train = tqdm(DataLoader(DatasetSplit(dataset, idxs), batch_size=args.local_bs, shuffle=True))
         self.lr = 1e-4
 
-    def train(self, net, lr_decay_rate):
+    def train(self, net, lr_decay_rate, opt=None):
         net.train()
         # train and update
         optim = torch.optim.Adam(net.parameters(), lr=1e-4)
+        if opt:
+            optim.load_state_dict(opt)
         epoch_loss = []
 
         for iter in range(self.args.gen_local_ep):
@@ -254,25 +294,23 @@ class LocalUpdate_DDPM_raw(object): # DDPM
             batch_loss = []
             train_loss = 0
             for images, labels in self.ldr_train:
+                optim.zero_grad()
                 images = images.to(self.args.device) # images.shape: torch.Size([batch_size, 1, 28, 28])
                 labels = labels.to(self.args.device)
                 # images = images.view(-1, self.args.output_channel, self.args.img_size, self.args.img_size)
                 # images = images.view(-1, 1, self.args.feature_size, self.args.feature_size) # self.args.local_bs
                 # save_image(images.view(self.args.local_bs, 1, 14, 14),
                 #             'imgFedCVAE/' + 'sample_' + '.png')
-                optim.zero_grad()
                 loss = net(images, labels)
                 loss.backward()
-
                 if loss_ema is None:
                     loss_ema = loss.item()
                 else:
                     loss_ema = 0.95 * loss_ema + 0.05 * loss.item()
                 optim.step()
-
                 batch_loss.append(loss_ema)
             epoch_loss.append(sum(batch_loss)/len(batch_loss))
-        return net.state_dict(), sum(epoch_loss) / len(epoch_loss)
+        return net.state_dict(), sum(epoch_loss) / len(epoch_loss), optim.state_dict()
 
 ##########################################
 #                  DCGAN                 #
@@ -281,7 +319,7 @@ class LocalUpdate_DDPM_raw(object): # DDPM
 class LocalUpdate_DCGAN(object): # DCGAN
     def __init__(self, args, dataset=None, idxs=None):
         self.args = args
-        self.loss_func = nn.CrossEntropyLoss()
+        # self.loss_func = nn.CrossEntropyLoss()
         self.selected_clients = []
         self.ldr_train = DataLoader(DatasetSplit(dataset, idxs), batch_size=args.local_bs, shuffle=True, drop_last=True)
         

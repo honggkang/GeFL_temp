@@ -85,7 +85,7 @@ def FedAvg_FE_raw(args, wg, ws):
     '''
 
     '''
-    Averaging non-common weights
+    Average model-by-model (equivalent local models)
     '''
     w_avg = [None for _ in range(args.num_models)]
     for j in range(args.num_models):

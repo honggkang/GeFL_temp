@@ -23,7 +23,7 @@ from utils.getData import *
 from utils.util import *
 # from torchsummaryX import summary
 
-os.makedirs("RAWimgFedCGAN", exist_ok=True)
+os.makedirs("RAWimgFedGAN", exist_ok=True)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--n_epochs", type=int, default=400, help="number of epochs of training")
@@ -56,7 +56,8 @@ np.random.seed(opt.rs)
 random.seed(opt.rs)
 # Loss functions
 adversarial_loss = torch.nn.MSELoss()
-
+# BCE_loss = torch.nn.BCELoss() # discriminator outputs negative value
+# Discriminator of Vanilla GAN has sigmoid layer at the last: returns positive value
 # Initialize generator and discriminator
 ggenerator = Generator(opt)
 gdiscriminator = Discriminator(opt)
@@ -73,7 +74,7 @@ if cuda:
     ggenerator.cuda()
     gdiscriminator.cuda()
     
-    adversarial_loss.cuda()
+    # adversarial_loss.cuda()
 
 FloatTensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
 LongTensor = torch.cuda.LongTensor if cuda else torch.LongTensor
@@ -117,14 +118,14 @@ def sample_image(n_row, batches_done):
     labels = np.array([num for _ in range(n_row) for num in range(n_row)])
     labels = Variable(LongTensor(labels))
     gen_imgs = ggenerator(z, labels)
-    save_image(gen_imgs.data, "RAWimgFedCGAN/" + str(opt.num_users) + "_%d.png" % batches_done, nrow=n_row, normalize=True)
+    save_image(gen_imgs.data, "RAWimgFedGAN/BCE" + str(opt.num_users) + "_%d.png" % batches_done, nrow=n_row, normalize=True)
 
 
 # ----------
 #  Training
 # ----------
 
-for epoch in range(1,1+opt.n_epochs):
+for epoch in range(1, 1+opt.n_epochs):
     for di in range(opt.num_users):
         for i, (imgs, labels) in enumerate(dataloaders[di]):
 
@@ -132,7 +133,7 @@ for epoch in range(1,1+opt.n_epochs):
 
             # Adversarial ground truths
             valid = Variable(FloatTensor(batch_size, 1).fill_(1.0), requires_grad=False)
-            fake = Variable(FloatTensor(batch_size, 1).fill_(0.0), requires_grad=False)
+            fake = Variable(FloatTensor(batch_size, 1).fill_(0.0), requires_grad=False)           
 
             # Configure input
             real_imgs = Variable(imgs.type(FloatTensor))
@@ -154,6 +155,7 @@ for epoch in range(1,1+opt.n_epochs):
             # Loss measures generator's ability to fool the discriminator
             validity = discriminators[di](gen_imgs, gen_labels)
             g_loss = adversarial_loss(validity, valid)
+
 
             g_loss.backward()
             optimizer_Gs[di].step()

@@ -61,7 +61,7 @@ class CVAE(nn.Module):
             z = torch.randn((sample_num, self.latent_size)).to(args.device)
             # c = 0 # 0 ~ 9 randint
             c = torch.randint(10, (sample_num, )).to(args.device) # MAX_NUM, (SIZE, )
-            input = torch.cat((self.label_emb(c), z), -1)
+            input = torch.cat([z, self.label_emb(c)], 1)
             h3 = self.elu(self.fc3(input))
             gen_imgs = self.sigmoid(self.fc4(h3))
             one_c = one_hot(c, args.num_classes).to(args.device)
@@ -75,12 +75,12 @@ class CVAE(nn.Module):
             labels = torch.arange(0,10).to(self.args.device) # context for us just cycles throught the mnist labels
             labels = labels.repeat(int(sample_num/labels.shape[0]))
             z = torch.randn(sample_num, self.args.latent_size).to(self.args.device)        
-            input = torch.cat((self.label_emb(labels), z), -1)
+            input = torch.cat([z, self.label_emb(labels)], 1)
             h3 = self.elu(self.fc3(input))
             gen_imgs = self.sigmoid(self.fc4(h3))
             return gen_imgs
         
-    # def make_batch(self, args):    
+    # def make_batch(self, args):
     #     with torch.no_grad():
     #         # c = torch.eye(10, 10).to(args.device)
     #         c = torch.randint(10, (args.local_bs, ))

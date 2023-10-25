@@ -59,28 +59,30 @@ parser.add_argument('--rs', type=int, default=0)
 parser.add_argument('--num_experiment', type=int, default=3, help="the number of experiments")
 parser.add_argument('--device_id', type=str, default='0')
 ### warming-up
-parser.add_argument('--wu_epochs', type=int, default=0) # warm-up epochs for main networks
-parser.add_argument('--gen_wu_epochs', type=int, default=400) # warm-up epochs for generator
+parser.add_argument('--gen_wu_epochs', type=int, default=100) # warm-up epochs for generator
 
 parser.add_argument('--epochs', type=int, default=50) # total communication round (train main nets by (local samples and gen) + train gen)
 parser.add_argument('--local_ep', type=int, default=5) # local epochs for training main nets by local samples
 parser.add_argument('--local_ep_gen', type=int, default=1) # local epochs for training main nets by generated samples
-parser.add_argument('--gen_local_ep', type=int, default=1) # local epochs for training generator
+parser.add_argument('--gen_local_ep', type=int, default=5) # local epochs for training generator
 
-parser.add_argument('--aid_by_gen', type=bool, default=True)
-parser.add_argument('--freeze_FE', type=bool, default=False) # N/A
+parser.add_argument('--aid_by_gen', type=bool, default=False)
 parser.add_argument('--freeze_gen', type=bool, default=False)
 parser.add_argument('--only_gen', type=bool, default=False)
-parser.add_argument('--avg_FE', type=bool, default=False)
+parser.add_argument('--avg_FE', type=bool, default=True)
 ### logging
-parser.add_argument('--sample_test', type=int, default=5) # local epochs for training generator
+parser.add_argument('--sample_test', type=int, default=10) # local epochs for training generator
+parser.add_argument('--save_imgs', type=bool, default=False) # local epochs for training generator
 parser.add_argument('--wandb', type=bool, default=False)
-parser.add_argument('--name', type=str, default='under_dev') # L-A: bad character
+parser.add_argument('--name', type=str, default='dev') # L-A: bad character
 ### GAN parameters
 parser.add_argument("--b1", type=float, default=0.5, help="adam: decay of first order momentum of gradient")
 parser.add_argument("--b2", type=float, default=0.999, help="adam: decay of first order momentum of gradient")
 parser.add_argument('--lr', type=float, default=0.0002) # GAN lr
 parser.add_argument('--latent_dim', type=int, default=100)
+### N/A
+parser.add_argument('--wu_epochs', type=int, default=0) # warm-up epochs for main networks
+parser.add_argument('--freeze_FE', type=bool, default=False) # N/A
 
 args = parser.parse_args()
 args.device = 'cuda:' + args.device_id
@@ -116,7 +118,7 @@ def main():
     if not os.path.exists(filename):
         os.makedirs(filename)
     if args.wandb:
-        run = wandb.init(dir=filename, project='GeFL-GAN-orig-1015', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
+        run = wandb.init(dir=filename, project='GeFL-GAN-onlySyn-1024', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
         wandb.config.update(args)
     # logger = get_logger(logpath=os.path.join(filename, 'logs'), filepath=os.path.abspath(__file__))
     
@@ -169,14 +171,13 @@ def main():
         gloss_avg = sum(gloss_locals) / len(gloss_locals)
         dloss_avg = sum(dloss_locals) / len(dloss_locals)
 
-        if iter % args.sample_test == 0 or iter == args.gen_wu_epochs:
-            sample_num = 100
+        if args.save_imgs and (iter % args.sample_test == 0 or iter == args.gen_wu_epochs):
+            sample_num = 40
             samples = gen_glob.sample_image_4visualization(sample_num)
             save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
-                        'imgFedGAN/' + 'SynOrig_' + str(iter) + '.png', nrow=10)
+                        'imgFedGAN/' + str(args.name)+ str(args.rs) + 'SynOrig_' + str(iter) + '.png', nrow=10, normalize=True)
         print('Warm-up GEN Round {:3d}, G Avg loss {:.3f}, D Avg loss {:.3f}'.format(iter, gloss_avg, dloss_avg))
         
-    torch.save(gen_w_glob, 'checkpoint/FedGAN.pt')
 
     best_perf = [0 for _ in range(args.num_models)]
 
@@ -206,13 +207,17 @@ def main():
             model_idx = dev_spec_idx
             model = local_models[model_idx]
             model.load_state_dict(ws_glob[model_idx])
-    
-            local = LocalUpdate(args, dataset=dataset_train, idxs=dict_users[idx])
-            # synthetic data updates header & real data updates whole target network
-            if args.aid_by_gen:
+            
+            if args.only_gen:
+                local = LocalUpdate_onlyGen(args, dataset=dataset_train, idxs=dict_users[idx])
                 weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), gennet=copy.deepcopy(gen_glob), learning_rate=lr)
             else:
-                weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), learning_rate=lr)                
+                local = LocalUpdate(args, dataset=dataset_train, idxs=dict_users[idx])
+                # synthetic data updates header & real data updates whole target network
+                if args.aid_by_gen:
+                    weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), gennet=copy.deepcopy(gen_glob), learning_rate=lr)
+                else:
+                    weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), learning_rate=lr)                
 
             ws_local[model_idx].append(weight)
             loss_locals.append(loss)
@@ -235,6 +240,13 @@ def main():
             
             gen_w_glob = FedAvg(gen_w_local)
             dis_w_glob = FedAvg(dis_w_local)
+            if args.save_imgs and (iter % args.sample_test == 0 or iter == args.epochs):
+                sample_num = 40
+                samples = gen_glob.sample_image_4visualization(sample_num)
+                save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
+                            'imgFedGAN/' + str(args.name)+ str(args.rs) + 'SynOrig_' + str(args.gen_wu_epochs+iter) + '.png', nrow=10, normalize=True)
+            print('GEN Round {:3d}, G Avg loss {:.3f}, D Avg loss {:.3f}'.format(args.gen_wu_epochs+iter, gloss_avg, dloss_avg))
+            
         else:
             gloss_avg = -1
             dloss_avg = -1
@@ -280,14 +292,7 @@ def main():
                 })
                                     
     # print(best_perf, 'AVG'+str(args.rs), sum(best_perf)/len(best_perf))
-
-    # if args.aid_by_gen:
-    #     sample_num = 10
-    #     samples = gen_glob.sample_image_4visualization(sample_num)
-    #     # sample.shape = [10, 256]
-    #     save_image(samples.view(sample_num, 1, args.feature_size, args.feature_size), 
-    #                 'imgFedCGAN/' + 'sample_' + '.png', nrow=10)
-    #     # save_image(samples.data, 'imgFedCGAN/' + 'sample_' + '.png')
+    torch.save(gen_w_glob, 'checkpoint/FedGAN' + str(args.name) + str(args.rs) + '.pt')
 
     if args.wandb:
         run.finish()

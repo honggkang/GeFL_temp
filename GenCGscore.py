@@ -69,11 +69,11 @@ args.img_shape = (args.output_channel, args.img_size, args.img_size)
 
 
 ### GAN
-# gennet = Generator(args).to(args.device)
-# gennet.load_state_dict(torch.load('checkpoint/FedGAN.pt'))
+gennet = Generator(args).to(args.device)
+gennet.load_state_dict(torch.load('checkpoint/FedGAN1000.pt'))
 ### VAE
-gennet = CVAE(args).to(args.device)
-gennet.load_state_dict(torch.load('checkpoint/FedVAE.pt'))
+# gennet = CVAE(args).to(args.device)
+# gennet.load_state_dict(torch.load('checkpoint/FedVAE1000.pt'))
 ### DDPM
 # gennet = DDPM(args, nn_model=ContextUnet(in_channels=args.output_channel, n_feat=args.n_feat, n_classes=args.num_classes),
 #                 betas=(1e-4, 0.02), drop_prob=0.1).to(args.device)

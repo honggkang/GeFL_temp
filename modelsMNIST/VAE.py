@@ -62,13 +62,13 @@ class CVAE(nn.Module):
         h4 = self.sigmoid(self.fc4(h3))
         return h4.view(h4.size(0), *self.img_shape)
 
-    def sample_image(self, args):
-        with torch.no_grad():
-            # z = Variable(FloatTensor(np.random.normal(0, 1, (n_row ** 2, opt.latent_dim))))
-            z = torch.randn((args.local_bs, args.latent_size)).to(args.device)
-            c = torch.randint(10, (args.local_bs, )).to(args.device) # MAX_NUM, (SIZE, )
-            input = torch.cat((self.label_emb(c), z), -1)
-            h3 = self.elu(self.fc3(input))
-            gen_imgs = self.sigmoid(self.fc4(h3))
-            one_c = one_hot(c, args.n_classes).to(args.device)
-            return gen_imgs, one_c
+    # def sample_image(self, args):
+    #     with torch.no_grad():
+    #         # z = Variable(FloatTensor(np.random.normal(0, 1, (n_row ** 2, opt.latent_dim))))
+    #         z = torch.randn((args.local_bs, args.latent_size)).to(args.device)
+    #         c = torch.randint(10, (args.local_bs, )).to(args.device) # MAX_NUM, (SIZE, )
+    #         input = torch.cat((self.label_emb(c), z), -1) # Wrong !
+    #         h3 = self.elu(self.fc3(input))
+    #         gen_imgs = self.sigmoid(self.fc4(h3))
+    #         one_c = one_hot(c, args.n_classes).to(args.device)
+    #         return gen_imgs, one_c

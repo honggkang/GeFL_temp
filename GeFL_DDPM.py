@@ -51,8 +51,8 @@ parser.add_argument('--noniid', action='store_true') # default: false
 parser.add_argument('--dir_param', type=float, default=0.3)
 parser.add_argument('--num_classes', type=int, default=10)
 ### optimizer
-parser.add_argument('--bs', type=int, default=128)
-parser.add_argument('--local_bs', type=int, default=128)
+parser.add_argument('--bs', type=int, default=64)
+parser.add_argument('--local_bs', type=int, default=64)
 # parser.add_argument("--batch_size", type=int, default=32, help="size of the batches")
 parser.add_argument('--momentum', type=float, default=0)
 parser.add_argument('--weight_decay', type=float, default=0)
@@ -61,26 +61,29 @@ parser.add_argument('--rs', type=int, default=0)
 parser.add_argument('--num_experiment', type=int, default=3, help="the number of experiments")
 parser.add_argument('--device_id', type=str, default='0')
 ### warming-up
-parser.add_argument('--wu_epochs', type=int, default=50) # warm-up epochs N/A
 parser.add_argument('--gen_wu_epochs', type=int, default=100) # warm-up epochs
 
-parser.add_argument('--epochs', type=int, default=50)
+parser.add_argument('--epochs', type=int, default=0)
 parser.add_argument('--local_ep', type=int, default=5)
 parser.add_argument('--local_ep_gen', type=int, default=1)
 parser.add_argument('--gen_local_ep', type=int, default=5)
 
-parser.add_argument('--aid_by_gen', type=bool, default=True)
-parser.add_argument('--freeze_FE', type=bool, default=False)
+parser.add_argument('--aid_by_gen', type=bool, default=False)
 parser.add_argument('--freeze_gen', type=bool, default=False)
 parser.add_argument('--only_gen', type=bool, default=False)
+parser.add_argument('--avg_FE', type=bool, default=True)
 ### logging
 parser.add_argument('--sample_test', type=int, default=10) # local epochs for training generator
+parser.add_argument('--save_imgs', type=bool, default=True) # local epochs for training generator
 parser.add_argument('--wandb', type=bool, default=False)
-parser.add_argument('--name', type=str, default='under_dev') # L-A: bad character
+parser.add_argument('--name', type=str, default='dev') # L-A: bad character
 ### DDPM parameters
 parser.add_argument('--n_feat', type=int, default=128) # 128 ok, 256 better (but slower)
-parser.add_argument('--n_T', type=int, default=200) # 400, 500
+parser.add_argument('--n_T', type=int, default=100) # 400, 500
 parser.add_argument('--guide_w', type=float, default=0.0) # 0, 0.5, 2
+###
+parser.add_argument('--wu_epochs', type=int, default=0) # warm-up epochs N/A
+parser.add_argument('--freeze_FE', type=bool, default=False)
 
 args = parser.parse_args()
 args.device = 'cuda:' + args.device_id
@@ -115,17 +118,20 @@ def main():
         os.makedirs(filename)
 
     if args.wandb:
-        run = wandb.init(dir=filename, project='GeFL-DDPM-orig-1015', name= str(args.name)+ 'w' +str(args.guide_w) + '_' + str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
+        run = wandb.init(dir=filename, project='GeFL-DDPM-orig-1023', name= str(args.name)+ 'w' +str(args.guide_w) + '_' + str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
         wandb.config.update(args)
     # logger = get_logger(logpath=os.path.join(filename, 'logs'), filepath=os.path.abspath(__file__))
     
     loss_train = []
     lr = 1e-1 # MLP
-
+    
     gen_glob = DDPM(args, nn_model=ContextUnet(in_channels=args.output_channel, n_feat=args.n_feat, n_classes=args.num_classes),
                     betas=(1e-4, 0.02), drop_prob=0.1).to(args.device)
     gen_w_glob = gen_glob.state_dict()
     
+    opt = torch.optim.Adam(gen_glob.parameters(), lr=1e-4).state_dict()
+    opts = [copy.deepcopy(opt) for _ in range(args.num_users)]    
+
     for iter in range(1, args.gen_wu_epochs+1):
         ''' ---------------------------
         Warming up for generative model
@@ -136,31 +142,32 @@ def main():
         
         m = max(int(args.frac * args.num_users), 1)
         idxs_users = np.random.choice(range(args.num_users), m, replace=False)
-        
         gen_glob.load_state_dict(gen_w_glob)
         
         for idx in idxs_users:
-                        
+
             local = LocalUpdate_DDPM_raw(args, dataset=train_data, idxs=dict_users[idx])
             if args.freeze_gen:
                 lr_rate = 1-iter/args.gen_wu_epochs
             else:
                 lr_rate = 1-iter/(args.gen_wu_epochs+args.epochs)
-            g_weight, gloss = local.train(net=copy.deepcopy(gen_glob), lr_decay_rate=lr_rate)
+            g_weight, gloss, opts[idx] = local.train(net=copy.deepcopy(gen_glob), lr_decay_rate=lr_rate, opt=opts[idx])
             # 1-(self.args.local_ep*(round-1) + iter)/(self.args.local_ep*(self.args.epochs+self.args.wu_epochs))
+
             gen_w_local.append(copy.deepcopy(g_weight))
             gloss_locals.append(gloss)
         
         gen_w_glob = FedAvg(gen_w_local)
         gloss_avg = sum(gloss_locals) / len(gloss_locals)
-        if iter % args.sample_test == 0 or iter == args.gen_wu_epochs:
-            sample_num = 50
+
+        if args.save_imgs and (iter % args.sample_test == 0 or iter == args.gen_wu_epochs):
+            gen_glob.eval()
+            sample_num = 40
             samples = gen_glob.sample_image_4visualization(sample_num, guide_w=args.guide_w)
             save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
-                        'imgFedDDPM/' + 'SynOrig28_' + str(iter) + '.png', nrow=10)
+                        'imgFedDDPM/' + str(args.name) + str(args.rs) + 'SynOrig28_' + str(iter) + '.png', nrow=10) # , normalize=True
+            gen_glob.train()
         print('Warm-up GEN Round {:3d}, G Avg loss {:.3f}'.format(iter, gloss_avg))
-
-    torch.save(gen_w_glob, 'checkpoint/FedDDPM.pt')
 
     best_perf = [0 for _ in range(args.num_models)]
 
@@ -188,11 +195,15 @@ def main():
             model = local_models[model_idx]
             model.load_state_dict(ws_glob[model_idx])
 
-            local = LocalUpdate(args, dataset=dataset_train, idxs=dict_users[idx])
-            if args.aid_by_gen:
+            if args.only_gen:
+                local = LocalUpdate_onlyGen(args, dataset=dataset_train, idxs=dict_users[idx])
                 weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), gennet=copy.deepcopy(gen_glob), learning_rate=lr)
             else:
-                weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), learning_rate=lr)
+                local = LocalUpdate(args, dataset=dataset_train, idxs=dict_users[idx])
+                if args.aid_by_gen:
+                    weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), gennet=copy.deepcopy(gen_glob), learning_rate=lr)
+                else:
+                    weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), learning_rate=lr)
                     
             ws_local[model_idx].append(weight)
             loss_locals.append(loss)
@@ -201,21 +212,21 @@ def main():
             if args.aid_by_gen and not args.freeze_gen:
                 local_gen = LocalUpdate_DDPM_raw(args, dataset=train_data, idxs=dict_users[idx])
                 lr_rate = 1-(iter+args.gen_wu_epochs)/(args.gen_wu_epochs+args.epochs)
-                g_weight, gloss = local_gen.train(net=copy.deepcopy(gen_glob), lr_decay_rate=lr_rate) # round=iter+args.wu_epochs
+                g_weight, gloss, opts[idx] = local_gen.train(net=copy.deepcopy(gen_glob), lr_decay_rate=lr_rate, opt=opts[idx])
 
                 gen_w_local.append(copy.deepcopy(g_weight))
                 gloss_locals.append(gloss)
                 
-                if iter % args.sample_test == 0 or iter == args.gen_wu_epochs:
-                    sample_num = 50
-                    samples = gen_glob.sample_image_4visualization(sample_num, guide_w=args.guide_w)
-                    save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
-                                'imgFedDDPM/' + 'SynOrig28_' + str(iter+args.gen_wu_epochs) + '.png', nrow=10)                
-                
         if args.aid_by_gen and not args.freeze_gen:
             gloss_avg = sum(gloss_locals) / len(gloss_locals)
-
             gen_w_glob = FedAvg(gen_w_local)
+            if args.save_imgs and (iter % args.sample_test == 0 or iter == args.epochs):
+                sample_num = 40
+                samples = gen_glob.sample_image_4visualization(sample_num, guide_w=args.guide_w)                    
+                save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
+                            'imgFedDDPM/' + str(args.name) + str(args.rs) + 'SynOrig28_' + str(args.gen_wu_epochs +iter) + '.png', nrow=10, normalize=True)
+            print('GEN Round {:3d}, G Avg loss {:.3f}'.format(args.gen_wu_epochs + iter, gloss_avg))
+
         else:
             gloss_avg = -1
 
@@ -254,6 +265,7 @@ def main():
                 })
 
     print(best_perf, 'AVG'+str(args.rs), sum(best_perf)/len(best_perf))
+    torch.save(gen_w_glob, 'checkpoint/FedDDPM' + str(args.name) + str(args.rs) + '.pt')
 
     # sample_num = 10
     # gen_glob.eval()

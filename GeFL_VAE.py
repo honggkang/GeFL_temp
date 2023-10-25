@@ -40,38 +40,42 @@ parser.add_argument('--momentum', type=float, default=0)
 parser.add_argument('--weight_decay', type=float, default=0)
 ### reproducibility
 parser.add_argument('--rs', type=int, default=0)
-parser.add_argument('--num_experiment', type=int, default=3, help="the number of experiments")
+parser.add_argument('--num_experiment', type=int, default=1, help="the number of experiments")
 parser.add_argument('--device_id', type=str, default='0')
 ### warming-up
-parser.add_argument('--wu_epochs', type=int, default=0) # warm-up epochs for main networks
-parser.add_argument('--gen_wu_epochs', type=int, default=400) # warm-up epochs for generator
+parser.add_argument('--gen_wu_epochs', type=int, default=100) # warm-up epochs for generator
 
-parser.add_argument('--epochs', type=int, default=50) # total communication round (train main nets by (local samples and gen) + train gen)
+parser.add_argument('--epochs', type=int, default=0) # total communication round (train main nets by (local samples and gen) + train gen)
 parser.add_argument('--local_ep', type=int, default=5) # local epochs for training main nets by local samples
 parser.add_argument('--local_ep_gen', type=int, default=1) # local epochs for training main nets by generated samples
-parser.add_argument('--gen_local_ep', type=int, default=1) # local epochs for training generator
+parser.add_argument('--gen_local_ep', type=int, default=5) # local epochs for training generator
 
 parser.add_argument('--aid_by_gen', type=bool, default=True)
-parser.add_argument('--freeze_FE', type=bool, default=False) # N/A
 parser.add_argument('--freeze_gen', type=bool, default=False)
 parser.add_argument('--only_gen', type=bool, default=False)
+parser.add_argument('--avg_FE', type=bool, default=True)
 ### logging
 parser.add_argument("--sample_test", type=int, default=10, help="interval between image sampling")
+parser.add_argument('--save_imgs', type=bool, default=True) # local epochs for training generator
 parser.add_argument('--wandb', type=bool, default=False)
-parser.add_argument('--name', type=str, default='under_dev') # L-A: bad character
+parser.add_argument('--name', type=str, default='dev') # L-A: bad character
 ### VAE parameters
 parser.add_argument("--latent_size", type=int, default=20, help="dimensionality of the latent space")
+### N/A
+parser.add_argument('--wu_epochs', type=int, default=0) # N/A warm-up epochs for main networks
+parser.add_argument('--freeze_FE', type=bool, default=False)
 
 args = parser.parse_args()
 args.img_shape = (args.output_channel, args.img_size, args.img_size)
 args.device = 'cuda:' + args.device_id
 # cuda = True if torch.cuda.is_available() else False
-kwargs = {'num_workers': 4, 'pin_memory': True} 
+kwargs = {'num_workers': 4, 'pin_memory': True}
 dataset_train, dataset_test = getDataset(args)
 
 '''
 no normalized dataset needed for VAE
 '''
+
 print(args)
 def main():
         
@@ -98,7 +102,7 @@ def main():
     if not os.path.exists(filename):
         os.makedirs(filename)
     if args.wandb:
-        run = wandb.init(dir=filename, project='GeFL-VAE-orig-1015', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
+        run = wandb.init(dir=filename, project='GeFL-VAE-onlySyn-1024', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
         wandb.config.update(args)
 
     loss_train = []
@@ -125,27 +129,22 @@ def main():
         for idx in idxs_users:
 
             local = LocalUpdate_VAE_raw(args, dataset=train_data, idxs=dict_users[idx])
-            if iter == 1:
-                model = CVAE(args).to(args.device)
-                opt = torch.optim.Adam(model.parameters(), lr=1e-3).state_dict()
-                g_weight, gloss, opts[idx] = local.train(net=model, opt=opt) # Different model initialization at the first
-            else:
-                g_weight, gloss, opts[idx] = local.train(net=copy.deepcopy(gen_glob), opt=opts[idx])
+            g_weight, gloss, opts[idx] = local.train(net=copy.deepcopy(gen_glob), opt=opts[idx])
 
+            # print(gloss)
             gen_w_local.append(copy.deepcopy(g_weight))
             gloss_locals.append(gloss)
         
         gen_w_glob = FedAvg(gen_w_local)
         gloss_avg = sum(gloss_locals) / len(gloss_locals)
 
-        if iter % args.sample_test == 0 or iter == args.gen_wu_epochs:
-            sample_num = 100
+        if args.save_imgs and (iter % args.sample_test == 0 or iter == args.gen_wu_epochs):
+            sample_num = 40
             samples = gen_glob.sample_image_4visualization(sample_num)
             save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
-                        'imgFedVAE/' + 'SynOrig_' + str(iter) + '.png', nrow=10, normalize=True)
+                        'imgFedVAE/' + str(args.name)+ str(args.rs) +'SynOrig_' + str(iter) + '.png', nrow=10, normalize=True)
         print('Warm-up GEN Round {:3d}, G Avg loss {:.3f}'.format(iter, gloss_avg))
 
-    torch.save(gen_w_glob, 'checkpoint/FedVAE.pt')
     best_perf = [0 for _ in range(args.num_models)]
     
     for iter in range(1, args.epochs+1):
@@ -168,12 +167,16 @@ def main():
             model = local_models[model_idx]
             model.load_state_dict(ws_glob[model_idx])
     
-            local = LocalUpdate(args, dataset=dataset_train, idxs=dict_users[idx])
-            # synthetic data updates header & real data updates whole target network
-            if args.aid_by_gen:
+            if args.only_gen:
+                local = LocalUpdate_onlyGen(args, dataset=dataset_train, idxs=dict_users[idx])
                 weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), gennet=copy.deepcopy(gen_glob), learning_rate=lr)
             else:
-                weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), learning_rate=lr)                
+                local = LocalUpdate(args, dataset=dataset_train, idxs=dict_users[idx])
+                # synthetic data updates header & real data updates whole target network
+                if args.aid_by_gen:
+                    weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), gennet=copy.deepcopy(gen_glob), learning_rate=lr)
+                else:
+                    weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), learning_rate=lr)                
 
             ws_local[model_idx].append(weight)
             loss_locals.append(loss)
@@ -181,22 +184,31 @@ def main():
             
             if args.aid_by_gen and not args.freeze_gen: # update GEN
                 local_gen = LocalUpdate_VAE_raw(args, dataset=train_data, idxs=dict_users[idx])
-                g_weight, gloss = local_gen.train(net=copy.deepcopy(gen_glob))
+                # g_weight, gloss = local_gen.train(net=copy.deepcopy(gen_glob))
+                g_weight, gloss, opts[idx] = local_gen.train(net=copy.deepcopy(gen_glob), opt=opts[idx])
 
                 gen_w_local.append(copy.deepcopy(g_weight))
-
                 gloss_locals.append(gloss)
                 
         if args.aid_by_gen and not args.freeze_gen:
             gloss_avg = sum(gloss_locals) / len(gloss_locals)
-            
             gen_w_glob = FedAvg(gen_w_local)
+            if args.save_imgs and (iter % args.sample_test == 0 or iter == args.epochs):
+                sample_num = 40
+                samples = gen_glob.sample_image_4visualization(sample_num)
+                save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
+                            'imgFedVAE/' + str(args.name)+ str(args.rs) +'SynOrig_' + str(args.gen_wu_epochs +iter) + '.png', nrow=10, normalize=True)
+            print('GEN Round {:3d}, G Avg loss {:.3f}'.format(args.gen_wu_epochs +iter, gloss_avg))
+                    
         else:
             gloss_avg = -1
             dloss_avg = -1
 
-        ws_glob, w_comm = FedAvg_FE(args, ws_glob, ws_local, w_comm) # main net, feature extractor weight update
-
+        if args.avg_FE:
+            ws_glob, w_comm = FedAvg_FE(args, ws_glob, ws_local, w_comm) # main net, feature extractor weight update
+        else:
+            ws_glob = FedAvg_FE_raw(args, ws_glob, ws_local) # main net, feature extractor weight update
+    
         loss_avg = sum(loss_locals) / len(loss_locals)
         try:
             gen_loss_avg = sum(gen_loss_locals) / len(gen_loss_locals)
@@ -229,6 +241,7 @@ def main():
                     "Mean test accuracy": sum(acc_test_tot) / len(acc_test_tot)
                 })
 
+    torch.save(gen_w_glob, 'checkpoint/FedVAE' + str(args.name) + str(args.rs) + '.pt')
     if args.wandb:
         run.finish()
         
