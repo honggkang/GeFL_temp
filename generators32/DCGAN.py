@@ -71,11 +71,11 @@ class generator(nn.Module):
         
         return x
 
-    def sample_image(self, args):
+    def sample_image(self, args, sample_num=0):
         with torch.no_grad():
         
-            z_ = torch.randn((args.local_bs, 100)).view(-1, 100, 1, 1).to(args.device)
-            y_ = (torch.rand(args.local_bs, 1) * 10).type(torch.LongTensor).squeeze()
+            z_ = torch.randn((sample_num, 100)).view(-1, 100, 1, 1).to(args.device)
+            y_ = (torch.rand(sample_num, 1) * 10).type(torch.LongTensor).squeeze()
 
             onehot = torch.zeros(10, 10)
             onehot = onehot.scatter_(1, torch.LongTensor([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]).view(10,1), 1).view(10, 10, 1, 1) # 10 x 10 eye matrix

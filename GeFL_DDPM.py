@@ -68,15 +68,15 @@ parser.add_argument('--local_ep', type=int, default=5)
 parser.add_argument('--local_ep_gen', type=int, default=1)
 parser.add_argument('--gen_local_ep', type=int, default=5)
 
-parser.add_argument('--aid_by_gen', type=bool, default=False)
-parser.add_argument('--freeze_gen', type=bool, default=False)
+parser.add_argument('--aid_by_gen', type=bool, default=True)
+parser.add_argument('--freeze_gen', type=bool, default=True)
 parser.add_argument('--only_gen', type=bool, default=False)
 parser.add_argument('--avg_FE', type=bool, default=True)
 ### logging
 parser.add_argument('--sample_test', type=int, default=10) # local epochs for training generator
 parser.add_argument('--save_imgs', type=bool, default=True) # local epochs for training generator
 parser.add_argument('--wandb', type=bool, default=False)
-parser.add_argument('--name', type=str, default='dev') # L-A: bad character
+parser.add_argument('--name', type=str, default='0100') # L-A: bad character
 ### DDPM parameters
 parser.add_argument('--n_feat', type=int, default=128) # 128 ok, 256 better (but slower)
 parser.add_argument('--n_T', type=int, default=100) # 400, 500
@@ -89,6 +89,7 @@ args = parser.parse_args()
 args.device = 'cuda:' + args.device_id
 args.img_shape = (args.output_channel, args.img_size, args.img_size)
 
+# tf = transforms.Compose([transforms.ToTensor(),transforms.Resize(32),]) # mnist is already normalised 0 to 1
 tf = transforms.Compose([transforms.ToTensor(),]) # mnist is already normalised 0 to 1
 train_data = datasets.MNIST(root='/home/hong/NeFL/.data/mnist', train=True, transform=tf, download=True) # VAE training data
 
@@ -118,7 +119,7 @@ def main():
         os.makedirs(filename)
 
     if args.wandb:
-        run = wandb.init(dir=filename, project='GeFL-DDPM-orig-1023', name= str(args.name)+ 'w' +str(args.guide_w) + '_' + str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
+        run = wandb.init(dir=filename, project='GeFL-DDPM32-1028', name= str(args.name)+ 'w' +str(args.guide_w) + '_' + str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
         wandb.config.update(args)
     # logger = get_logger(logpath=os.path.join(filename, 'logs'), filepath=os.path.abspath(__file__))
     
@@ -165,7 +166,7 @@ def main():
             sample_num = 40
             samples = gen_glob.sample_image_4visualization(sample_num, guide_w=args.guide_w)
             save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
-                        'imgFedDDPM/' + str(args.name) + str(args.rs) + 'SynOrig28_' + str(iter) + '.png', nrow=10) # , normalize=True
+                        'imgFedDDPM/' + str(args.name) + str(args.rs) + 'Orig32_' + str(iter) + '.png', nrow=10) # , normalize=True
             gen_glob.train()
         print('Warm-up GEN Round {:3d}, G Avg loss {:.3f}'.format(iter, gloss_avg))
 
@@ -221,10 +222,12 @@ def main():
             gloss_avg = sum(gloss_locals) / len(gloss_locals)
             gen_w_glob = FedAvg(gen_w_local)
             if args.save_imgs and (iter % args.sample_test == 0 or iter == args.epochs):
+                gen_glob.eval()
                 sample_num = 40
                 samples = gen_glob.sample_image_4visualization(sample_num, guide_w=args.guide_w)                    
                 save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
-                            'imgFedDDPM/' + str(args.name) + str(args.rs) + 'SynOrig28_' + str(args.gen_wu_epochs +iter) + '.png', nrow=10, normalize=True)
+                            'imgFedDDPM/' + str(args.name) + str(args.rs) + 'Orig32_' + str(args.gen_wu_epochs +iter) + '.png', nrow=10, normalize=True)
+                gen_glob.train()
             print('GEN Round {:3d}, G Avg loss {:.3f}'.format(args.gen_wu_epochs + iter, gloss_avg))
 
         else:

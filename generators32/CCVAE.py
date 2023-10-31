@@ -103,30 +103,31 @@ class CCVAE(nn.Module):
         pred = self.decoder(z)
         return pred, mu, logvar
     
-    def sample_image(self, args):
+    def sample_image(self, args, sample_num=0):
         with torch.no_grad():
-            z = torch.randn(args.local_bs, args.latent_size).to(self.args.device)
-            y = (torch.rand(args.local_bs, 1) * 10).type(torch.LongTensor).squeeze()
+            z = torch.randn(sample_num, args.latent_size).to(self.args.device)
+            y = (torch.rand(sample_num, 1) * 10).type(torch.LongTensor).squeeze()
 
             label = np.zeros((y.shape[0], 10))
             label[np.arange(z.shape[0]), y] = 1
             label = torch.tensor(label)
-            pred = self.decoder(torch.cat((z.to(self.args.device), label.float().to(self.args.device)), dim=1))
+            pred = self.decoder(torch.cat((z, label.float().to(self.args.device)), dim=1))
             one_c = one_hot(y, args.num_classes).to(self.args.device)
 
         return pred, one_c
 
     def sample_image_4visualization(self, sample_num):
-        z = torch.randn(sample_num, self.args.latent_size).to(self.args.device)
-        y = torch.arange(0,10)
-        y = y.repeat(int(sample_num/y.shape[0]))
-
         with torch.no_grad():
-            label = np.zeros((y.shape[0], 10))
-            label[np.arange(z.shape[0]), y] = 1
-            label = torch.tensor(label)
+            z = torch.randn(sample_num, self.args.latent_size).to(self.args.device)
+            y = torch.arange(0,10)
+            y = y.repeat(int(sample_num/y.shape[0]))
 
-            pred = self.decoder(torch.cat((z.to(device),label.float().to(device)), dim=1))
+            with torch.no_grad():
+                label = np.zeros((y.shape[0], 10))
+                label[np.arange(z.shape[0]), y] = 1
+                label = torch.tensor(label)
+
+                pred = self.decoder(torch.cat((z, label.float().to(self.args.device)), dim=1))
         return pred
         
 def plot(epoch, pred, y,name='test_'):

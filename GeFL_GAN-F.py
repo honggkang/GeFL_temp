@@ -58,8 +58,8 @@ parser.add_argument('--noniid', action='store_true') # default: false
 parser.add_argument('--dir_param', type=float, default=0.3)
 parser.add_argument('--num_classes', type=int, default=10)
 ### optimizer
-parser.add_argument('--bs', type=int, default=128)
-parser.add_argument('--local_bs', type=int, default=128)
+parser.add_argument('--bs', type=int, default=64)
+parser.add_argument('--local_bs', type=int, default=64)
 # parser.add_argument("--batch_size", type=int, default=32, help="size of the batches")
 parser.add_argument('--momentum', type=float, default=0)
 parser.add_argument('--weight_decay', type=float, default=0)
@@ -81,9 +81,10 @@ parser.add_argument('--freeze_FE', type=bool, default=False)
 parser.add_argument('--freeze_gen', type=bool, default=False)
 parser.add_argument('--only_gen', type=bool, default=False)
 parser.add_argument('--load_trained_FE', type=bool, default=False)
-
+parser.add_argument('--avg_FE', type=bool, default=True)
 ### logging
-parser.add_argument('--sample_test', type=int, default=5) # local epochs for training generator
+parser.add_argument('--sample_test', type=int, default=10) # local epochs for training generator
+parser.add_argument('--save_imgs', type=bool, default=True) # local epochs for training generator
 parser.add_argument('--wandb', type=bool, default=True)
 parser.add_argument('--name', type=str, default='under_dev') # L-A: bad character
 ### GAN parameters
@@ -122,7 +123,7 @@ def main():
     if not os.path.exists(filename):
         os.makedirs(filename)
     if args.wandb:
-        run = wandb.init(dir=filename, project='GeFL-GANF14-1016', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
+        run = wandb.init(dir=filename, project='GeFL-GANF14-1028-2', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
         wandb.config.update(args)
     # logger = get_logger(logpath=os.path.join(filename, 'logs'), filepath=os.path.abspath(__file__))
     
@@ -154,8 +155,11 @@ def main():
                 ws_local[model_idx].append(copy.deepcopy(weight))
                 loss_locals.append(loss)
             
-            ws_glob, w_comm = FedAvg_FE(args, ws_glob, ws_local, w_comm)
-            
+            if args.avg_FE:
+                ws_glob, w_comm = FedAvg_FE(args, ws_glob, ws_local, w_comm) # main net, feature extractor weight update
+            else:
+                ws_glob = FedAvg_FE_raw(args, ws_glob, ws_local)
+                            
             loss_avg = sum(loss_locals) / len(loss_locals)
             print('Warm-up TargetNet Round {:3d}, Avg loss {:.3f}'.format(iter, loss_avg))
             loss_train.append(loss_avg)
@@ -179,10 +183,10 @@ def main():
                         "Communication round": iter,
                         "Mean test accuracy": sum(acc_test_tot) / len(acc_test_tot)
                     })
-        torch.save(w_comm, 'models/save/Fed' + '_'
-                    + str(args.models) + '_common_net_sameSize.pt')
     else:
-        w_comm = torch.load('models/save/Fed_mlp2_common_net_sameSize.pt') # common_net = FE_MLP.to(args.device)
+        w_comm = torch.load('models/save/Fed_mlp_common_net.pt') # common_net = FE_MLP.to(args.device)
+    torch.save(w_comm, 'models/save/Fed' + '_'
+                + str(args.models) + '14_common_net.pt')
 
     common_net.load_state_dict(w_comm)
     
@@ -191,6 +195,12 @@ def main():
 
     gen_glob = Generator(args).to(args.device)
     dis_glob = Discriminator(args).to(args.device)
+
+    optg = torch.optim.Adam(gen_glob.parameters(), lr=args.lr, betas=(args.b1, args.b2)).state_dict()
+    optd = torch.optim.Adam(dis_glob.parameters(), lr=args.lr, betas=(args.b1, args.b2)).state_dict()
+
+    optgs = [copy.deepcopy(optg) for _ in range(args.num_users)]
+    optds = [copy.deepcopy(optd) for _ in range(args.num_users)]
 
     gen_w_glob = gen_glob.state_dict()
     dis_w_glob = dis_glob.state_dict()
@@ -213,7 +223,7 @@ def main():
         for idx in idxs_users:
                         
             local = LocalUpdate_GAN(args, common_net, dataset=dataset_train, idxs=dict_users[idx])
-            g_weight, d_weight, gloss, dloss = local.train(gnet=copy.deepcopy(gen_glob), dnet=copy.deepcopy(dis_glob))
+            g_weight, d_weight, gloss, dloss, optgs[idx], optds[idx] = local.train(gnet=copy.deepcopy(gen_glob), dnet=copy.deepcopy(dis_glob), optg=optgs[idx], optd=optds[idx])
 
             gen_w_local.append(copy.deepcopy(g_weight))
             dis_w_local.append(copy.deepcopy(d_weight))
@@ -226,14 +236,14 @@ def main():
         
         gloss_avg = sum(gloss_locals) / len(gloss_locals)
         dloss_avg = sum(dloss_locals) / len(dloss_locals)
-        
-        # if iter % args.sample_test == 0 or iter == args.gen_wu_epochs:
-        #     sample_num = 50
-        #     samples = gen_glob.sample_image_4visualization(sample_num)
-        #     save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
-        #                 'imgFedGANF/' + 'SynFeat32_' + str(iter) + '.png', nrow=10)
 
-        print('Warm-up Round {:3d}, G Avg loss {:.3f}, D Avg loss {:.3f}'.format(iter, gloss_avg, dloss_avg))
+        if args.save_imgs and (iter % args.sample_test == 0 or iter == args.gen_wu_epochs):
+            sample_num = 40
+            samples = gen_glob.sample_image_4visualization(sample_num)
+            save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
+                        'imgFedGANF/' + str(args.name)+ str(args.rs) + 'SynFeat14_' + str(iter) + '.png', nrow=10, normalize=True)
+
+        print('Warm-up GEN Round {:3d}, G Avg loss {:.3f}, D Avg loss {:.3f}'.format(iter, gloss_avg, dloss_avg))
 
     best_perf = [0 for _ in range(args.num_models)]
 
@@ -263,33 +273,32 @@ def main():
             model_idx = dev_spec_idx
             model = local_models[model_idx]
             model.load_state_dict(ws_glob[model_idx])
-            if args.freeze_FE:
-                if args.only_gen:
+            if args.freeze_FE: # A / D / B
+                if args.only_gen: # B
                     # update (header; layers after FE) only by synthetic data
                     local = LocalUpdate_onlyGen(args, dataset=dataset_train, idxs=dict_users[idx])
                     weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), feature_start=True, gennet=copy.deepcopy(gen_glob), learning_rate=lr)
-                else:
+                else: # A / D
                     # update header by syn+real data
                     local = LocalUpdate_header(args, dataset=dataset_train, idxs=dict_users[idx])
-                    if args.aid_by_gen:
+                    if args.aid_by_gen: # A / D
                         weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), feature_extractor=common_net, gennet=copy.deepcopy(gen_glob), learning_rate=lr)
-                    else:
+                    else: # w/o generator
                         weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), feature_extractor=common_net, learning_rate=lr) # weights of models
-            else:
-                local = LocalUpdate(args, dataset=dataset_train, idxs=dict_users[idx])
-                # synthetic data updates header & real data updates whole target network
+            else: # C / E
+                local = LocalUpdate(args, dataset=dataset_train, idxs=dict_users[idx]) # synthetic data updates header & real data updates whole target network
                 if args.aid_by_gen:
                     weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), gennet=copy.deepcopy(gen_glob), learning_rate=lr)
                 else:
-                    weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), learning_rate=lr)                
+                    weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), learning_rate=lr)
 
             ws_local[model_idx].append(weight)
             loss_locals.append(loss)
             gen_loss_locals.append(gen_loss)
             
-            if args.aid_by_gen and not args.freeze_gen: # update GEN
+            if args.aid_by_gen and not args.freeze_gen: # update GEN (D / E)
                 local_gen = LocalUpdate_GAN(args, common_net, dataset=dataset_train, idxs=dict_users[idx])
-                g_weight, d_weight, gloss, dloss = local_gen.train(gnet=copy.deepcopy(gen_glob), dnet=copy.deepcopy(dis_glob))
+                g_weight, d_weight, gloss, dloss, optgs[idx], optds[idx] = local_gen.train(gnet=copy.deepcopy(gen_glob), dnet=copy.deepcopy(dis_glob), optg=optgs[idx], optd=optds[idx])
 
                 gen_w_local.append(copy.deepcopy(g_weight))
                 dis_w_local.append(copy.deepcopy(d_weight))
@@ -303,6 +312,14 @@ def main():
             
             gen_w_glob = FedAvg(gen_w_local)
             dis_w_glob = FedAvg(dis_w_local)
+
+            if args.save_imgs and (iter % args.sample_test == 0 or iter == args.epochs):
+                sample_num = 40
+                samples = gen_glob.sample_image_4visualization(sample_num)
+                save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
+                            'imgFedGANF/' + str(args.name)+ str(args.rs) + 'SynFeat14_' + str(args.gen_wu_epochs+iter) + '.png', nrow=10, normalize=True)            
+            print('GEN Round {:3d}, G Avg loss {:.3f}, D Avg loss {:.3f}'.format(args.gen_wu_epochs+iter, gloss_avg, dloss_avg))
+
         else:
             gloss_avg = -1
             dloss_avg = -1
@@ -310,7 +327,10 @@ def main():
         if args.freeze_FE:
             ws_glob, w_comm = FedAvg_frozen_FE(args, ws_glob, ws_local, w_comm) # main net, feature extractor weight update
         else:
-            ws_glob, w_comm = FedAvg_FE(args, ws_glob, ws_local, w_comm) # main net, feature extractor weight update
+            if args.avg_FE:
+                ws_glob, w_comm = FedAvg_FE(args, ws_glob, ws_local, w_comm) # main net, feature extractor weight update
+            else:
+                ws_glob = FedAvg_FE_raw(args, ws_glob, ws_local)                
 
         loss_avg = sum(loss_locals) / len(loss_locals)
         try:

@@ -32,8 +32,8 @@ parser.add_argument("--img_size", type=int, default=14, help="size of each image
 parser.add_argument('--dataset', type=str, default='mnist') # stl10, cifar10, svhn, mnist, fmnist
 parser.add_argument('--num_classes', type=int, default=10)
 ### optimizer
-parser.add_argument('--bs', type=int, default=128)
-parser.add_argument('--local_bs', type=int, default=128) # 128
+parser.add_argument('--bs', type=int, default=64)
+parser.add_argument('--local_bs', type=int, default=64) # 128
 parser.add_argument('--momentum', type=float, default=0)
 parser.add_argument('--weight_decay', type=float, default=0)
 ### reproducibility
@@ -54,9 +54,10 @@ parser.add_argument('--freeze_FE', type=bool, default=False) # N/A
 parser.add_argument('--freeze_gen', type=bool, default=False)
 parser.add_argument('--only_gen', type=bool, default=False)
 parser.add_argument('--load_trained_FE', type=bool, default=False)
-
+parser.add_argument('--avg_FE', type=bool, default=True)
 ### logging
-parser.add_argument("--sample_test", type=int, default=5, help="interval between image sampling")
+parser.add_argument("--sample_test", type=int, default=10, help="interval between image sampling")
+parser.add_argument('--save_imgs', type=bool, default=True) # local epochs for training generator
 parser.add_argument('--wandb', type=bool, default=True)
 parser.add_argument('--name', type=str, default='under_dev') # L-A: bad character
 ### VAE parameters
@@ -66,7 +67,7 @@ args = parser.parse_args()
 args.img_shape = (args.output_channel, args.img_size, args.img_size)
 args.device = 'cuda:' + args.device_id
 # cuda = True if torch.cuda.is_available() else False
-kwargs = {'num_workers': 4, 'pin_memory': True} 
+# kwargs = {'num_workers': 4, 'pin_memory': True} 
 dataset_train, dataset_test = getDataset(args)
 
 '''
@@ -92,7 +93,7 @@ def main():
     if not os.path.exists(filename):
         os.makedirs(filename)
     if args.wandb:
-        run = wandb.init(dir=filename, project='GeFL-VAEF14-1016', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
+        run = wandb.init(dir=filename, project='GeFL-VAEF14-1028-2', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
         wandb.config.update(args)
 
     loss_train = []
@@ -123,8 +124,11 @@ def main():
                 ws_local[model_idx].append(copy.deepcopy(weight))
                 loss_locals.append(loss)
             
-            ws_glob, w_comm = FedAvg_FE(args, ws_glob, ws_local, w_comm)
-            
+            if args.avg_FE: # LG-FedAvg
+                ws_glob, w_comm = FedAvg_FE(args, ws_glob, ws_local, w_comm) # main net, feature extractor weight update
+            else: # FedAvG
+                ws_glob = FedAvg_FE_raw(args, ws_glob, ws_local)
+
             loss_avg = sum(loss_locals) / len(loss_locals)
             print('Warm-up TargetNet Round {:3d}, Avg loss {:.3f}'.format(iter, loss_avg))
             loss_train.append(loss_avg)
@@ -149,17 +153,20 @@ def main():
                         "Mean test accuracy": sum(acc_test_tot) / len(acc_test_tot)
                     })
         torch.save(w_comm, 'models/save/Fed' + '_'
-                    + str(args.models) + '_common_net.pt') # _common_net_sameSize.pt
+                    + str(args.models) + '14_common_net.pt')                   
     else:
-        w_comm = torch.load('models/save/Fed_mlp2_common_net_sameSize.pt') # Fed_mlp2_common_net_sameSize common_net = FE_MLP.to(args.device)
+        w_comm = torch.load('models/save/Fed_mlp_common_net.pt') # common_net = FE_MLP.to(args.device)
             
-# .to(args.device)
     common_net.load_state_dict(w_comm)
-    w_comm = common_net.state_dict()
-    
+
+    if args.freeze_FE:
+        common_net.eval()
+
     gen_glob = CVAE(args).to(args.device)
+    opt = torch.optim.Adam(gen_glob.parameters(), lr=1e-3).state_dict()
+    opts = [copy.deepcopy(opt) for _ in range(args.num_users)]
+
     gen_w_glob = gen_glob.state_dict()
-    # optim = None
     for iter in range(1, args.gen_wu_epochs+1):
         ''' ---------------------------
         Warming up for generative model
@@ -171,25 +178,22 @@ def main():
         idxs_users = np.random.choice(range(args.num_users), m, replace=False)
         
         gen_glob.load_state_dict(gen_w_glob)
-        
         for idx in idxs_users:
                         
             local = LocalUpdate_VAE(args, net_com=common_net, dataset=dataset_train, idxs=dict_users[idx])
-            g_weight, gloss = local.train(net=copy.deepcopy(gen_glob))
+            g_weight, gloss, opts[idx] = local.train(net=copy.deepcopy(gen_glob), opt=opts[idx])
 
             gen_w_local.append(copy.deepcopy(g_weight))
-            
             gloss_locals.append(gloss)
         
         gen_w_glob = FedAvg(gen_w_local)
-        
         gloss_avg = sum(gloss_locals) / len(gloss_locals)
 
-        if iter % args.sample_test == 0 or iter == args.gen_wu_epochs:
-            sample_num = 50
+        if args.save_imgs and (iter % args.sample_test == 0 or iter == args.gen_wu_epochs):
+            sample_num = 40
             samples = gen_glob.sample_image_4visualization(sample_num)
             save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
-                        'imgFedVAEF/' + 'SynFeat28_' + str(iter) + '.png', nrow=10)
+                        'imgFedVAEF/' + str(args.name)+ str(args.rs) +'SynFeat14_' + str(iter) + '.png', nrow=10, normalize=True)
         print('Warm-up GEN Round {:3d}, G Avg loss {:.3f}'.format(iter, gloss_avg))
 
     best_perf = [0 for _ in range(args.num_models)]
@@ -231,7 +235,7 @@ def main():
                 if args.aid_by_gen:
                     weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), gennet=copy.deepcopy(gen_glob), learning_rate=lr)
                 else:
-                    weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), learning_rate=lr)                
+                    weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), learning_rate=lr)
 
             ws_local[model_idx].append(weight)
             loss_locals.append(loss)
@@ -239,21 +243,31 @@ def main():
             
             if args.aid_by_gen and not args.freeze_gen: # update GEN
                 local_gen = LocalUpdate_VAE(args, net_com=common_net, dataset=dataset_train, idxs=dict_users[idx])
-                g_weight, gloss = local_gen.train(net=copy.deepcopy(gen_glob))
+                g_weight, gloss, opts[idx] = local_gen.train(net=copy.deepcopy(gen_glob), opt=opts[idx])
 
                 gen_w_local.append(copy.deepcopy(g_weight))
-
                 gloss_locals.append(gloss)
                 
         if args.aid_by_gen and not args.freeze_gen:
             gloss_avg = sum(gloss_locals) / len(gloss_locals)
-            
             gen_w_glob = FedAvg(gen_w_local)
+            if args.save_imgs and (iter % args.sample_test == 0 or iter == args.epochs):
+                sample_num = 40
+                samples = gen_glob.sample_image_4visualization(sample_num)
+                save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
+                            'imgFedVAEF/' + str(args.name)+ str(args.rs) +'SynFeat14_' + str(args.gen_wu_epochs+iter) + '.png', nrow=10, normalize=True)            
+            print('GEN Round {:3d}, G Avg loss {:.3f}'.format(args.gen_wu_epochs +iter, gloss_avg))
+
         else:
             gloss_avg = -1
-            dloss_avg = -1
 
-        ws_glob, w_comm = FedAvg_FE(args, ws_glob, ws_local, w_comm) # main net, feature extractor weight update
+        if args.freeze_FE: # LocalUpdate_header does not update w_comm, so this is redundant code
+            ws_glob, w_comm = FedAvg_frozen_FE(args, ws_glob, ws_local, w_comm) # main net, feature extractor weight update            
+        else:
+            if args.avg_FE: # LG-FedAvg
+                ws_glob, w_comm = FedAvg_FE(args, ws_glob, ws_local, w_comm) # main net, feature extractor weight update
+            else: # FedAvg
+                ws_glob = FedAvg_FE_raw(args, ws_glob, ws_local)
 
         loss_avg = sum(loss_locals) / len(loss_locals)
         try:

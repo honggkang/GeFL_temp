@@ -246,19 +246,18 @@ def main():
                 save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
                             'imgFedGAN/' + str(args.name)+ str(args.rs) + 'SynOrig_' + str(args.gen_wu_epochs+iter) + '.png', nrow=10, normalize=True)
             print('GEN Round {:3d}, G Avg loss {:.3f}, D Avg loss {:.3f}'.format(args.gen_wu_epochs+iter, gloss_avg, dloss_avg))
-            
         else:
             gloss_avg = -1
             dloss_avg = -1
-
-        if args.avg_FE:
-            ws_glob, w_comm = FedAvg_FE(args, ws_glob, ws_local, w_comm) # main net, feature extractor weight update
-        else:
-            ws_glob = FedAvg_FE_raw(args, ws_glob, ws_local)
         '''
         FedAvg_FE: LG-FedAVG
         FedAvg_FE_raw: FedAVG
         '''
+        if args.avg_FE:
+            ws_glob, w_comm = FedAvg_FE(args, ws_glob, ws_local, w_comm) # main net, feature extractor weight update
+        else:
+            ws_glob = FedAvg_FE_raw(args, ws_glob, ws_local)
+
         loss_avg = sum(loss_locals) / len(loss_locals)
         try:
             gen_loss_avg = sum(gen_loss_locals) / len(gen_loss_locals)

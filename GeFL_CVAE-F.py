@@ -55,9 +55,8 @@ parser.add_argument('--noniid', action='store_true') # default: false
 parser.add_argument('--dir_param', type=float, default=0.3)
 parser.add_argument('--num_classes', type=int, default=10)
 ### optimizer
-parser.add_argument('--bs', type=int, default=128)
-parser.add_argument('--local_bs', type=int, default=128)
-# parser.add_argument("--batch_size", type=int, default=32, help="size of the batches")
+parser.add_argument('--bs', type=int, default=64)
+parser.add_argument('--local_bs', type=int, default=64)
 parser.add_argument('--momentum', type=float, default=0)
 parser.add_argument('--weight_decay', type=float, default=0)
 ### reproducibility
@@ -78,9 +77,10 @@ parser.add_argument('--freeze_FE', type=bool, default=False)
 parser.add_argument('--freeze_gen', type=bool, default=False)
 parser.add_argument('--only_gen', type=bool, default=False)
 parser.add_argument('--load_trained_FE', type=bool, default=False)
-parser.add_argument('--cg_pruning', type=bool, default=True)
+parser.add_argument('--avg_FE', type=bool, default=True)
 ### logging
-parser.add_argument('--sample_test', type=int, default=5) # local epochs for training generator
+parser.add_argument('--sample_test', type=int, default=10) # local epochs for training generator
+parser.add_argument('--save_imgs', type=bool, default=True) # local epochs for training generator
 parser.add_argument('--wandb', type=bool, default=True)
 parser.add_argument('--name', type=str, default='under_dev') # L-A: bad character
 ### VAE parameters
@@ -88,6 +88,7 @@ parser.add_argument('--latent_size', type=int, default=16) # local epochs for tr
 ### target nets
 parser.add_argument('--lr', type=float, default=1e-1)
 ### cgscore pruning
+parser.add_argument('--cg_pruning', type=bool, default=False)
 parser.add_argument('--pruning_ratio', type=float, default=0.2)
 parser.add_argument('--from_low', default=True, help='True: prunes low score')
 
@@ -120,7 +121,7 @@ def main():
         os.makedirs(filename)
 
     if args.wandb:
-        run = wandb.init(dir=filename, project='GeFL-CVAEF16-1019', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
+        run = wandb.init(dir=filename, project='GeFL-CVAEF16-1028', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
         wandb.config.update(args)
     # logger = get_logger(logpath=os.path.join(filename, 'logs'), filepath=os.path.abspath(__file__))
     
@@ -152,7 +153,10 @@ def main():
                 ws_local[model_idx].append(copy.deepcopy(weight))
                 loss_locals.append(loss)
             
-            ws_glob, w_comm = FedAvg_FE(args, ws_glob, ws_local, w_comm)
+            if args.avg_FE: # LG-FedAvg
+                ws_glob, w_comm = FedAvg_FE(args, ws_glob, ws_local, w_comm) # main net, feature extractor weight update
+            else: # FedAvG
+                ws_glob = FedAvg_FE_raw(args, ws_glob, ws_local)
             
             loss_avg = sum(loss_locals) / len(loss_locals)
             print('Warm-up TargetNet Round {:3d}, Avg loss {:.3f}'.format(iter, loss_avg))
@@ -179,7 +183,7 @@ def main():
                     })
 
         torch.save(w_comm, 'models/save/Fed' + '_'
-                    + str(args.models) + '_common_net.pt')
+                    + str(args.models) + '16_common_net.pt')
     else:
         w_comm = torch.load('models/save/Fed_cnn_common_net.pt') # common_net = FE_MLP.to(args.device)
 
@@ -189,12 +193,14 @@ def main():
         common_net.eval()
 
     gen_glob = CCVAE(args).to(args.device)
-    gen_w_glob = gen_glob.state_dict()
+    opt = torch.optim.Adam(gen_glob.parameters(), lr=1e-3, weight_decay=0.001).state_dict()
+    opts = [copy.deepcopy(opt) for _ in range(args.num_users)]
 
+    gen_w_glob = gen_glob.state_dict()
     for iter in range(1, args.gen_wu_epochs+1):
-        '''
+        ''' ---------------------------
         Warming up for generative model
-        '''
+        --------------------------- '''
         gen_w_local = []
         loss_locals = []
         
@@ -205,7 +211,7 @@ def main():
         for idx in idxs_users:
                         
             local = LocalUpdate_CCVAE(args, common_net, dataset=dataset_train, idxs=dict_users[idx])
-            gen_weight, loss = local.train(net=copy.deepcopy(gen_glob))
+            gen_weight, loss, opts[idx] = local.train(net=copy.deepcopy(gen_glob), opt=opts[idx])
 
             gen_w_local.append(copy.deepcopy(gen_weight))
             loss_locals.append(loss)
@@ -214,13 +220,15 @@ def main():
         loss_avg = sum(loss_locals) / len(loss_locals)
 
         if iter % args.sample_test == 0 or iter == args.gen_wu_epochs:
-            sample_num = 50
+            gen_glob.eval()
+            sample_num = 40
             samples = gen_glob.sample_image_4visualization(sample_num)
             save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
                         'imgFedCVAEF/' + 'Feat16_' +str(args.name)+str(args.rs)+str(iter) + '.png', nrow=10)
+            gen_glob.train()
         print('Warm-up Gen Round {:3d}, CVAE Average loss {:.3f}'.format(iter, loss_avg))
 
-    torch.save(gen_w_glob, 'checkpoint/FedCVAEF.pt')
+    # torch.save(gen_w_glob, 'checkpoint/FedCVAEF.pt')
     best_perf = [0 for _ in range(args.num_models)]
 
     for iter in range(1,args.epochs+1):
@@ -251,17 +259,28 @@ def main():
                     local = LocalUpdate_onlyGen(args, dataset=dataset_train, idxs=dict_users[idx])
                     weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), feature_start=True, gennet=copy.deepcopy(gen_glob), learning_rate=lr)
                 else:
-                    local = LocalUpdate_header_cg(args, dataset=dataset_train, idxs=dict_users[idx])
+                    local = LocalUpdate_header(args, dataset=dataset_train, idxs=dict_users[idx])
                     if args.aid_by_gen:
-                        weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), feature_extractor=common_net, gennet=copy.deepcopy(gen_glob), cg=args.cg_pruning, learning_rate=lr)
+                        weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), feature_extractor=common_net, gennet=copy.deepcopy(gen_glob), learning_rate=lr)
                     else:
                         weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), feature_extractor=common_net, learning_rate=lr) # weights of models
+                    # local = LocalUpdate_header_cg(args, dataset=dataset_train, idxs=dict_users[idx])
+                    # if args.aid_by_gen:
+                    #     weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), feature_extractor=common_net, gennet=copy.deepcopy(gen_glob), cg=args.cg_pruning, learning_rate=lr)
+                    # else:
+                    #     weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), feature_extractor=common_net, learning_rate=lr)
             else:
-                local = LocalUpdate_cg(args, dataset=dataset_train, idxs=dict_users[idx])
+                local = LocalUpdate(args, dataset=dataset_train, idxs=dict_users[idx])
+                # synthetic data updates header & real data updates whole target network
                 if args.aid_by_gen:
-                    weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), gennet=copy.deepcopy(gen_glob), cg=args.cg_pruning, learning_rate=lr)
+                    weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), gennet=copy.deepcopy(gen_glob), learning_rate=lr)
                 else:
                     weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), learning_rate=lr)
+                # local = LocalUpdate_cg(args, dataset=dataset_train, idxs=dict_users[idx])
+                # if args.aid_by_gen:
+                #     weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), gennet=copy.deepcopy(gen_glob), cg=args.cg_pruning, learning_rate=lr)
+                # else:
+                #     weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), learning_rate=lr)
 
             ws_local[model_idx].append(weight)
             loss_locals.append(loss)
@@ -269,21 +288,22 @@ def main():
 
             if args.aid_by_gen and not args.freeze_gen:
                 local_gen = LocalUpdate_CCVAE(args, common_net, dataset=dataset_train, idxs=dict_users[idx])
-                gen_weight, gloss = local_gen.train(net=copy.deepcopy(gen_glob))
+                gen_weight, gloss, opts[idx] = local_gen.train(net=copy.deepcopy(gen_glob), opt=opts[idx])
                 
                 gen_w_local.append(gen_weight)
                 gloss_locals.append(gloss)
-
-                if iter % args.sample_test == 0 or iter == args.gen_wu_epochs:
-                    sample_num = 50
-                    samples = gen_glob.sample_image_4visualization(sample_num)
-                    save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
-                                'imgFedCVAEF/' + 'Feat16_' +str(args.name)+str(args.rs)+str(iter+args.gen_wu_epochs) + '.png', nrow=10)
                 
         if args.aid_by_gen and not args.freeze_gen:
-            gloss_avg = sum(gloss_locals) / len(gloss_locals)
-            
+            gloss_avg = sum(gloss_locals) / len(gloss_locals)           
             gen_w_glob = FedAvg(gen_w_local)
+            if iter % args.sample_test == 0 or iter == args.gen_wu_epochs:
+                gen_glob.eval()
+                sample_num = 40
+                samples = gen_glob.sample_image_4visualization(sample_num)
+                save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
+                            'imgFedCVAEF/' + 'Feat16_' +str(args.name)+str(args.rs)+str(iter+args.gen_wu_epochs) + '.png', nrow=10)
+                gen_glob.train()
+            print('Gen Round {:3d}, CVAE Average loss {:.3f}'.format(args.gen_wu_epochs+iter, loss_avg))                
         else:
             gloss_avg = -1
 

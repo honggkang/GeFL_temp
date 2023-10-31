@@ -105,7 +105,7 @@ class CCVAE(nn.Module):
             label = np.zeros((y.shape[0], 10))
             label[np.arange(z.shape[0]), y] = 1
             label = torch.tensor(label)
-            pred = self.decoder(torch.cat((z.to(self.args.device), label.float().to(self.args.device)), dim=1))
+            pred = self.decoder(torch.cat((z, label.float().to(self.args.device)), dim=1))
             one_c = one_hot(y, args.num_classes).to(self.args.device)
 
         return pred, one_c

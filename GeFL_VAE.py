@@ -40,12 +40,12 @@ parser.add_argument('--momentum', type=float, default=0)
 parser.add_argument('--weight_decay', type=float, default=0)
 ### reproducibility
 parser.add_argument('--rs', type=int, default=0)
-parser.add_argument('--num_experiment', type=int, default=1, help="the number of experiments")
+parser.add_argument('--num_experiment', type=int, default=3, help="the number of experiments")
 parser.add_argument('--device_id', type=str, default='0')
 ### warming-up
 parser.add_argument('--gen_wu_epochs', type=int, default=100) # warm-up epochs for generator
 
-parser.add_argument('--epochs', type=int, default=0) # total communication round (train main nets by (local samples and gen) + train gen)
+parser.add_argument('--epochs', type=int, default=50) # total communication round (train main nets by (local samples and gen) + train gen)
 parser.add_argument('--local_ep', type=int, default=5) # local epochs for training main nets by local samples
 parser.add_argument('--local_ep_gen', type=int, default=1) # local epochs for training main nets by generated samples
 parser.add_argument('--gen_local_ep', type=int, default=5) # local epochs for training generator
@@ -131,7 +131,6 @@ def main():
             local = LocalUpdate_VAE_raw(args, dataset=train_data, idxs=dict_users[idx])
             g_weight, gloss, opts[idx] = local.train(net=copy.deepcopy(gen_glob), opt=opts[idx])
 
-            # print(gloss)
             gen_w_local.append(copy.deepcopy(g_weight))
             gloss_locals.append(gloss)
         
@@ -144,7 +143,7 @@ def main():
             save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
                         'imgFedVAE/' + str(args.name)+ str(args.rs) +'SynOrig_' + str(iter) + '.png', nrow=10, normalize=True)
         print('Warm-up GEN Round {:3d}, G Avg loss {:.3f}'.format(iter, gloss_avg))
-
+    
     best_perf = [0 for _ in range(args.num_models)]
     
     for iter in range(1, args.epochs+1):
