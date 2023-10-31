@@ -68,10 +68,17 @@ c = Variable(LongTensor(np.random.randint(0, args.num_classes, bs)))
 from DDPM.ddpm28 import *
 fedgen = DDPM(args, nn_model=ContextUnet(in_channels=args.output_channel, n_feat=args.n_feat, n_classes=args.num_classes),
                 betas=(1e-4, 0.02), drop_prob=0.1).to(args.device) # [transforms.ToTensor(),]
-fedgen.load_state_dict(torch.load('checkpoint/FedDDPM1000.pt')) # evaluate over args.guide_w = 0, 2
+fedgen.load_state_dict(torch.load('checkpoint/FedDDPM01000.pt')) # evaluate over args.guide_w = 0, 2
 # fedgen.load_state_dict(torch.load('checkpoint/FedDDPM1001.pt')) # evaluate over args.guide_w = 0, 2
 # fedgen.load_state_dict(torch.load('checkpoint/FedDDPM1002.pt')) # evaluate over args.guide_w = 0, 2
 summary(fedgen, x, c) # torchsummaryX
+
+fedgen.eval()
+sample_num = 40
+samples = fedgen.sample_image_4visualization(sample_num, guide_w=args.guide_w)
+save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
+                        'imgFedDDPM/Load28' + '.png', nrow=10) # , normalize=True
+
 
 fedgen.eval()
 with torch.no_grad():
