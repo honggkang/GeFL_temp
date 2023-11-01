@@ -16,7 +16,7 @@ parser.add_argument("--n_cpu", type=int, default=8, help="number of cpu threads 
 parser.add_argument("--latent_dim", type=int, default=100, help="dimensionality of the latent space") # GAN
 parser.add_argument("--latent_size", type=int, default=20, help="dimensionality of the latent space") # VAE
 parser.add_argument("--n_feat", type=int, default=128) # DDPM
-parser.add_argument("--n_T", type=int, default=60) # DDPM
+parser.add_argument("--n_T", type=int, default=100) # DDPM
 parser.add_argument("--w", type=int, default=1) # DDPM guidance
 
 parser.add_argument("--n_classes", type=int, default=10, help="number of classes for dataset")

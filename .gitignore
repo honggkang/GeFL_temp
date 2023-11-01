@@ -1,16 +1,17 @@
-imgFedVAE/
-imgFedVAEF/
-imgFedGAN/
-imgFedGANF/
-imgFedDDPM/
-imgFedDDPMF/
-imgFedDCGAN/
-imgFedDCGANF/
-imgFedCVAE/
-imgFedCVAEF/
-imgFedCGAN/
-imgFedVAE/
-imgFedCDDPM/
+# imgFedVAE/
+# imgFedVAEF/
+# imgFedGAN/
+# imgFedGANF/
+# imgFedDDPM/
+# imgFedDDPMF/
+# imgFedDCGAN/
+# imgFedDCGANF/
+# imgFedCVAE/
+# imgFedCVAEF/
+# imgFedCGAN/
+# imgFedVAE/
+# imgFedCDDPM/
+imgs/
 generatedImages/
 diffusion_outputs10/
 data/
