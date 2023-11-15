@@ -12,6 +12,7 @@
 # imgFedVAE/
 # imgFedCDDPM/
 imgs/
+.vscode/
 generatedImages/
 diffusion_outputs10/
 data/

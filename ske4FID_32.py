@@ -50,9 +50,9 @@ c = Variable(LongTensor(np.random.randint(0, args.num_classes, bs)))
 from generators32.DCGAN import *
 fedgen = generator(args, d=128).to(args.device)
 add = discriminator(args, d=128).to(args.device)
-# fedgen.load_state_dict(torch.load('checkpoint/FedGAN1000.pt'))
-# fedgen.load_state_dict(torch.load('checkpoint/FedGAN1001.pt'))
-# fedgen.load_state_dict(torch.load('checkpoint/FedGAN1002.pt'))
+fedgen.load_state_dict(torch.load('checkpoint/FedDCGANupdateGEN0.pt'))
+# fedgen.load_state_dict(torch.load('checkpoint/FedDCGANupdateGEN1.pt'))
+# fedgen.load_state_dict(torch.load('checkpoint/FedDCGANupdateGEN2.pt'))
 onehot = torch.zeros(10, 10)
 onehot = onehot.scatter_(1, torch.LongTensor([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]).view(10,1), 1).view(10, 10, 1, 1) # 10 x 10 eye matrix
 y_ = (torch.rand(bs, 1) * 10).type(torch.LongTensor).squeeze()
@@ -63,21 +63,20 @@ for i in range(10):
     fill[i, i, :, :] = 1
 y_fill_ = fill[y_]
 y_fill_ = Variable(y_fill_.cuda())
-summary(fedgen, z, y_label_) # torchsummaryX
-summary(add, x, y_fill_)
+# summary(fedgen, z, y_label_) # torchsummaryX
+# summary(add, x, y_fill_)
 
 ######### CVAE #########
 # from generators32.CCVAE import *
 # fedgen = CCVAE(args).to(args.device) # [transforms.ToTensor(),]
-# # # fedgen.load_state_dict(torch.load('checkpoint/FedVAE1000.pt'))
-# # # fedgen.load_state_dict(torch.load('checkpoint/FedVAE1001.pt'))
-# # # fedgen.load_state_dict(torch.load('checkpoint/FedVAE1002.pt'))
+# fedgen.load_state_dict(torch.load('checkpoint/FedCVAEfreezeGEN0.pt'))
+# fedgen.load_state_dict(torch.load('checkpoint/FedCVAEfreezeGEN1.pt'))
+# fedgen.load_state_dict(torch.load('checkpoint/FedCVAEfreezeGEN2.pt'))
 # y = (torch.rand(bs, 1) * 10).type(torch.LongTensor).squeeze()
 # label = np.zeros((bs, 10))
 # label[np.arange(bs), y] = 1
 # label = torch.tensor(label).to(args.device)
 # summary(fedgen, x, label) # torchsummaryX
-# encode: fc1, fc21, fc22 / decode: after mu/logvar
 
 ######### DDPM #########
 # from DDPM.ddpm32 import *
@@ -88,9 +87,9 @@ summary(add, x, y_fill_)
 # fedgen.load_state_dict(torch.load('checkpoint/FedDDPM1002.pt')) # evaluate over args.guide_w = 0, 2
 # summary(fedgen, x, c) # torchsummaryX
 
-# fedgen.eval()
-# with torch.no_grad():
-#     img_batch, _ = fedgen.sample_image(args, sample_num=10) # outputs imgs of size (sample_num, 1*28*28)
-# img_batch = img_batch.view(-1, args.output_channel, args.img_size, args.img_size) # (sample_num, 1, 28, 28)
+fedgen.eval()
+with torch.no_grad():
+    img_batch, _ = fedgen.sample_image(args, sample_num=10) # outputs imgs of size (sample_num, 1*32*32)
+img_batch = img_batch.view(-1, args.output_channel, args.img_size, args.img_size) # (sample_num, 1, 32, 32)
 
-# save_image(img_batch, 'imgFedGEN/SynOrig_Ex' + '.png', nrow=10, normalize=True)
+save_image(img_batch, 'imgs/imgFedGEN/SynOrig_Ex1' + '.png', nrow=10, normalize=True)

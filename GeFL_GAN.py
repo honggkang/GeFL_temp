@@ -36,8 +36,9 @@ from mlp_generators.GAN import *
 from utils.util import test_img, get_logger
 
 parser = argparse.ArgumentParser()
+
 ### clients
-parser.add_argument('--num_users', type=int, default=10)
+parser.add_argument('--num_users', type=int, default=1)
 parser.add_argument('--frac', type=float, default=1)
 parser.add_argument('--partial_data', type=float, default=0.1)
 ### model & feature size
@@ -55,26 +56,26 @@ parser.add_argument('--local_bs', type=int, default=64)
 parser.add_argument('--momentum', type=float, default=0)
 parser.add_argument('--weight_decay', type=float, default=0)
 ### reproducibility
-parser.add_argument('--rs', type=int, default=0)
-parser.add_argument('--num_experiment', type=int, default=3, help="the number of experiments")
-parser.add_argument('--device_id', type=str, default='0')
+parser.add_argument('--rs', type=int, default=12)
+parser.add_argument('--num_experiment', type=int, default=1, help="the number of experiments")
+parser.add_argument('--device_id', type=str, default='1')
 ### warming-up
-parser.add_argument('--gen_wu_epochs', type=int, default=100) # warm-up epochs for generator
+parser.add_argument('--gen_wu_epochs', type=int, default=400) # warm-up epochs for generator
 
-parser.add_argument('--epochs', type=int, default=50) # total communication round (train main nets by (local samples and gen) + train gen)
+parser.add_argument('--epochs', type=int, default=0) # total communication round (train main nets by (local samples and gen) + train gen)
 parser.add_argument('--local_ep', type=int, default=5) # local epochs for training main nets by local samples
 parser.add_argument('--local_ep_gen', type=int, default=1) # local epochs for training main nets by generated samples
-parser.add_argument('--gen_local_ep', type=int, default=5) # local epochs for training generator
+parser.add_argument('--gen_local_ep', type=int, default=1) # local epochs for training generator
 
-parser.add_argument('--aid_by_gen', type=bool, default=False)
+parser.add_argument('--aid_by_gen', type=bool, default=True)
 parser.add_argument('--freeze_gen', type=bool, default=False)
 parser.add_argument('--only_gen', type=bool, default=False)
 parser.add_argument('--avg_FE', type=bool, default=True)
 ### logging
-parser.add_argument('--sample_test', type=int, default=10) # local epochs for training generator
-parser.add_argument('--save_imgs', type=bool, default=False) # local epochs for training generator
+parser.add_argument('--sample_test', type=int, default=20) # local epochs for training generator
+parser.add_argument('--save_imgs', type=bool, default=True) # local epochs for training generator
 parser.add_argument('--wandb', type=bool, default=False)
-parser.add_argument('--name', type=str, default='dev') # L-A: bad character
+parser.add_argument('--name', type=str, default='1uINIT') # L-A: bad character
 ### GAN parameters
 parser.add_argument("--b1", type=float, default=0.5, help="adam: decay of first order momentum of gradient")
 parser.add_argument("--b2", type=float, default=0.999, help="adam: decay of first order momentum of gradient")
@@ -92,15 +93,32 @@ args.feature_size = args.img_size
 dataset_train, dataset_test = getDataset(args)
 # img_size = dataset_train[0][0].shape
 print(args)
+
+
+# def initialize_weights(model):
+#     classname = model.__class__.__name__
+#     # fc layer
+#     if classname.find('Linear') != -1:
+#         nn.init.normal_(model.weight.data, 0.0, 0.02)
+#         nn.init.constant_(model.bias.data, 0)
+#     # batchnorm
+#     elif classname.find('BatchNorm') != -1:
+#         nn.init.normal_(model.weight.data, 0.0, 0.02)
+#         nn.init.constant_(model.bias.data, 0)
+
+
 def main():
+
+    tf = transforms.Compose([transforms.Resize(args.img_size),transforms.ToTensor(),transforms.Normalize([0.5], [0.5])]) # mnist is already normalised 0 to 1
+    if args.dataset == 'mnist':
+        train_data = datasets.MNIST(root='/home/hong/NeFL/.data/mnist', train=True, transform=tf, download=True)
+    elif args.dataset == 'fmnist':
+        train_data = datasets.FashionMNIST(root='/home/hong/NeFL/.data/fmnist', train=True, transform=tf, download=True)
 
     if args.noniid:
         dict_users = noniid_dir(args, args.dir_param, dataset_train)
     else:
-        dict_users = cifar_iid(dataset_train, int(1/args.partial_data*args.num_users), args.rs)
-
-    tf = transforms.Compose([transforms.ToTensor(),transforms.Normalize([0.5], [0.5])]) # mnist is already normalised 0 to 1
-    train_data = datasets.MNIST(root='/home/hong/NeFL/.data/mnist', train=True, transform=tf, download=True) # VAE training data
+        dict_users = cifar_iid(train_data, int(1/args.partial_data*args.num_users), args.rs)
 
     if not args.aid_by_gen:
         args.gen_wu_epochs = 0
@@ -127,17 +145,18 @@ def main():
 
     gen_glob = Generator(args).to(args.device)
     dis_glob = Discriminator(args).to(args.device)
+    # gen_glob.apply(initialize_weights)
+    # dis_glob.apply(initialize_weights)
     
-    # optgs , optds = [], []
-    
+    # optgs , optds = [], []    
     optg = torch.optim.Adam(gen_glob.parameters(), lr=args.lr, betas=(args.b1, args.b2)).state_dict()
     optd = torch.optim.Adam(dis_glob.parameters(), lr=args.lr, betas=(args.b1, args.b2)).state_dict()
  
     optgs = [copy.deepcopy(optg) for _ in range(args.num_users)]
     optds = [copy.deepcopy(optd) for _ in range(args.num_users)]
 
-    gen_w_glob = gen_glob.state_dict()
-    dis_w_glob = dis_glob.state_dict()
+    # gen_w_glob = gen_glob.state_dict()
+    # dis_w_glob = dis_glob.state_dict()
     
     for iter in range(1, args.gen_wu_epochs+1):
         ''' ---------------------------
@@ -151,11 +170,8 @@ def main():
         m = max(int(args.frac * args.num_users), 1)
         idxs_users = np.random.choice(range(args.num_users), m, replace=False)
         
-        gen_glob.load_state_dict(gen_w_glob)
-        dis_glob.load_state_dict(dis_w_glob)
-        
         for idx in idxs_users:
-                        
+
             local = LocalUpdate_GAN_raw(args, dataset=train_data, idxs=dict_users[idx])
             g_weight, d_weight, gloss, dloss, optgs[idx], optds[idx] = local.train(gnet=copy.deepcopy(gen_glob), dnet=copy.deepcopy(dis_glob), optg=optgs[idx], optd=optds[idx])
 
@@ -171,11 +187,27 @@ def main():
         gloss_avg = sum(gloss_locals) / len(gloss_locals)
         dloss_avg = sum(dloss_locals) / len(dloss_locals)
 
+        gen_glob.load_state_dict(gen_w_glob)
+        dis_glob.load_state_dict(dis_w_glob)
+
         if args.save_imgs and (iter % args.sample_test == 0 or iter == args.gen_wu_epochs):
-            sample_num = 40
+            gen_glob.eval()
+            sample_num = 100
             samples = gen_glob.sample_image_4visualization(sample_num)
             save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
-                        'imgFedGAN/' + str(args.name)+ str(args.rs) + 'SynOrig_' + str(iter) + '.png', nrow=10, normalize=True)
+                        'imgs/imgFedGAN/' + str(args.name)+ str(args.rs) + '_' + str(iter) + '.png', nrow=10)
+            gen_glob.train()
+
+            # gen_glob.eval()
+            # z = Variable(FloatTensor(np.random.normal(0, 1, (100, args.latent_dim))))
+            # # Get labels ranging from 0 to n_classes for n rows
+            # labels = np.array([num for _ in range(10) for num in range(10)])
+            # labels = Variable(LongTensor(labels))
+            # gen_imgs = gen_glob(z, labels)
+            # gen_imgs = gen_imgs.view(100, args.output_channel, args.img_size, args.img_size)
+            # save_image(gen_imgs.data, "imgs/imgFedGAN/np_foward" + str(args.name) + str(args.rs) + "_%d.png" %iter, nrow=10, normalize=True)
+            # gen_glob.train()
+
         print('Warm-up GEN Round {:3d}, G Avg loss {:.3f}, D Avg loss {:.3f}'.format(iter, gloss_avg, dloss_avg))
         
 
@@ -244,7 +276,7 @@ def main():
                 sample_num = 40
                 samples = gen_glob.sample_image_4visualization(sample_num)
                 save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
-                            'imgFedGAN/' + str(args.name)+ str(args.rs) + 'SynOrig_' + str(args.gen_wu_epochs+iter) + '.png', nrow=10, normalize=True)
+                            'imgs/imgFedGAN/' + str(args.name)+ str(args.rs) + 'SynOrig_' + str(args.gen_wu_epochs+iter) + '.png', nrow=10, normalize=True)
             print('GEN Round {:3d}, G Avg loss {:.3f}, D Avg loss {:.3f}'.format(args.gen_wu_epochs+iter, gloss_avg, dloss_avg))
         else:
             gloss_avg = -1
@@ -302,8 +334,6 @@ if __name__ == "__main__":
         torch.manual_seed(args.rs)
         torch.cuda.manual_seed(args.rs)
         torch.cuda.manual_seed_all(args.rs) # if use multi-GPU
-        # torch.backends.cudnn.deterministic = True
-        # torch.backends.cudnn.benchmark = False
         np.random.seed(args.rs)
         random.seed(args.rs)
         main()

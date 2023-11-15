@@ -124,7 +124,6 @@ def main():
         
         m = max(int(args.frac * args.num_users), 1)
         idxs_users = np.random.choice(range(args.num_users), m, replace=False)
-        gen_glob.load_state_dict(gen_w_glob)
         
         for idx in idxs_users:
 
@@ -136,6 +135,7 @@ def main():
         
         gen_w_glob = FedAvg(gen_w_local)
         gloss_avg = sum(gloss_locals) / len(gloss_locals)
+        gen_glob.load_state_dict(gen_w_glob)
 
         if args.save_imgs and (iter % args.sample_test == 0 or iter == args.gen_wu_epochs):
             sample_num = 40

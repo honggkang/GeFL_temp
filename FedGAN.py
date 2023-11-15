@@ -1,5 +1,5 @@
 '''
-Train CGAN by federated learning
+Train Conditional GAN by federated learning
 '''
 import argparse
 import os
@@ -23,7 +23,7 @@ from utils.getData import *
 from utils.util import *
 # from torchsummaryX import summary
 
-os.makedirs("RAWimgFedGAN", exist_ok=True)
+os.makedirs("imgs/RAWimgFedGAN", exist_ok=True)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--n_epochs", type=int, default=400, help="number of epochs of training")
@@ -37,10 +37,10 @@ parser.add_argument("--n_classes", type=int, default=10, help="number of classes
 
 parser.add_argument("--img_size", type=int, default=28, help="size of each image dimension")
 parser.add_argument("--channels", type=int, default=1, help="number of image channels")
-parser.add_argument("--sample_interval", type=int, default=20, help="interval between image sampling")
-parser.add_argument('--rs', type=int, default=0)
+parser.add_argument("--sample_interval", type=int, default=40, help="interval between image sampling")
+parser.add_argument('--rs', type=int, default=2)
 
-parser.add_argument("--num_users", type=int, default=10, help="interval between image sampling")
+parser.add_argument("--num_users", type=int, default=1, help="interval between image sampling")
 parser.add_argument('--partial_data', type=float, default=0.1)
 
 opt = parser.parse_args()
@@ -64,8 +64,10 @@ gdiscriminator = Discriminator(opt)
 
 generators, discriminators = [], []
 for i in range(opt.num_users):
-    generators.append(Generator(opt))
-    discriminators.append(Discriminator(opt))
+    # generators.append(Generator(opt))
+    # discriminators.append(Discriminator(opt))
+    generators.append(copy.deepcopy(ggenerator))
+    discriminators.append(copy.deepcopy(gdiscriminator))
 
 if cuda:
     for i in range(opt.num_users):
@@ -95,8 +97,8 @@ train_data = datasets.MNIST(root='./data/', train=True,
                                  transforms.Normalize([0.5], [0.5])
                                 ]), download=True)
 
-dict_users = dict_iid(train_data, int(1/opt.partial_data*opt.num_users))
-
+# dict_users = dict_iid(train_data, int(1/opt.partial_data*opt.num_users))
+dict_users = cifar_iid(train_data, int(1/opt.partial_data*opt.num_users), opt.rs)
 
 dataloaders = []
 for i in range(opt.num_users):
@@ -111,14 +113,15 @@ for i in range(opt.num_users):
     
 
 def sample_image(n_row, batches_done):
-    """Saves a grid of generated digits ranging from 0 to n_classes"""
-    # Sample noise
-    z = Variable(FloatTensor(np.random.normal(0, 1, (n_row ** 2, opt.latent_dim))))
-    # Get labels ranging from 0 to n_classes for n rows
-    labels = np.array([num for _ in range(n_row) for num in range(n_row)])
-    labels = Variable(LongTensor(labels))
-    gen_imgs = ggenerator(z, labels)
-    save_image(gen_imgs.data, "RAWimgFedGAN/BCE" + str(opt.num_users) + "_%d.png" % batches_done, nrow=n_row, normalize=True)
+    with torch.no_grad():
+        """Saves a grid of generated digits ranging from 0 to n_classes"""
+        # Sample noise
+        z = Variable(FloatTensor(np.random.normal(0, 1, (n_row ** 2, opt.latent_dim))))
+        # Get labels ranging from 0 to n_classes for n rows
+        labels = np.array([num for _ in range(n_row) for num in range(n_row)])
+        labels = Variable(LongTensor(labels))
+        gen_imgs = ggenerator(z, labels)
+        save_image(gen_imgs.data, "imgs/RAWimgFedGAN/" + str(opt.num_users) + '_' + str(opt.rs) + "_%d.png" % batches_done, nrow=n_row, normalize=True)
 
 
 # ----------
@@ -210,5 +213,5 @@ for epoch in range(1, 1+opt.n_epochs):
     if epoch % opt.sample_interval == 0:
         sample_image(n_row=10, batches_done=epoch)
 
-torch.save(gw, 'models/save/' + str(opt.num_users)+ '_'+ str(opt.n_epochs)+ 'gan_generator.pt')
-torch.save(dw, 'models/save/' + str(opt.num_users)+ '_'+ str(opt.n_epochs)+ 'gan_discriminator.pt')
+# torch.save(gw, 'models/save/' + str(opt.num_users)+ '_'+ str(opt.n_epochs)+ 'gan_generator.pt')
+# torch.save(dw, 'models/save/' + str(opt.num_users)+ '_'+ str(opt.n_epochs)+ 'gan_discriminator.pt')

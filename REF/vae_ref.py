@@ -1,3 +1,6 @@
+'''
+https://github.com/pytorch/examples/blob/main/vae/main.py
+'''
 import torch
 import torch.utils.data
 from torch import nn, optim

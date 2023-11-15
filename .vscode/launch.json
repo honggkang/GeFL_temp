@@ -10,7 +10,9 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "justMyCode": true,
+            "justMyCode": true, // "--partial_data", "1",
+            // "args": ["--aid_by_gen", "True", "--num_users", "10", "--gen_wu_epochs", "400", "--gen_local_ep", "1", "--epochs", "0", "--save_imgs", "True", "--name", "10user"]
+            // --device_id 0 --num_experiment 1 --num_users 1 --partial_data 1 --gen_wu_epochs 100 --epochs 0 --aid_by_gen True --freeze_gen True --save_imgs True --name 1userGAN
             // "args": ["--aid_by_gen", "True", "--freeze_FE", "True", "--freeze_gen", "True", "--gen_wu_epochs", "100", "--epochs", "50", "--name", "A"],
         }
     ]

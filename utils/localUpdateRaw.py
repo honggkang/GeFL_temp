@@ -122,13 +122,17 @@ class LocalUpdate_onlyGen(object):
 #                   GAN                  #
 ##########################################
 
-FloatTensor = torch.cuda.FloatTensor
-LongTensor = torch.cuda.LongTensor
+# FloatTensor = torch.cuda.FloatTensor
+# LongTensor = torch.cuda.LongTensor
+
+FloatTensor = torch.FloatTensor
+LongTensor = torch.LongTensor
 
 class LocalUpdate_GAN_raw(object): # GAN
     def __init__(self, args, dataset=None, idxs=None):
         self.args = args
-        self.loss_func = nn.CrossEntropyLoss()
+        self.adv_loss = torch.nn.MSELoss().to(args.device)
+        # self.adv_loss = torch.nn.BCELoss().to(args.device)        
         self.selected_clients = []
         self.ldr_train = DataLoader(DatasetSplit(dataset, idxs), batch_size=args.local_bs, shuffle=True) # , drop_last=True
         
@@ -146,7 +150,8 @@ class LocalUpdate_GAN_raw(object): # GAN
         g_epoch_loss = []
         d_epoch_loss = []
 
-        adversarial_loss = torch.nn.MSELoss()
+        # adversarial_loss = torch.nn.MSELoss()
+        # adversarial_loss.to(self.args.device)
         # torch.nn.CrossEntropyLoss()
         for iter in range(self.args.gen_local_ep):
             g_batch_loss = []
@@ -155,7 +160,7 @@ class LocalUpdate_GAN_raw(object): # GAN
             # d_train_loss = 0
             for batch_idx, (images, labels) in enumerate(self.ldr_train):
                 batch_size = images.shape[0]
-                images = images.to(self.args.device)
+                # images = images.to(self.args.device)
                 
                 # Adversarial ground truths
                 valid = Variable(FloatTensor(batch_size, 1).fill_(1.0), requires_grad=False).to(self.args.device)
@@ -180,7 +185,7 @@ class LocalUpdate_GAN_raw(object): # GAN
                 
                 # Loss measures generator's ability to fool the discriminator
                 validity = dnet(gen_imgs, gen_labels)
-                g_loss = adversarial_loss(validity, valid)
+                g_loss = self.adv_loss(validity, valid)
                 
                 g_loss.backward()
                 optimizerG.step()
@@ -192,10 +197,10 @@ class LocalUpdate_GAN_raw(object): # GAN
                 
                 # Loss for real images
                 validity_real = dnet(real_imgs, labels)
-                d_real_loss = adversarial_loss(validity_real, valid)
+                d_real_loss = self.adv_loss(validity_real, valid)
                 # Loss for fake images
                 validity_fake = dnet(gen_imgs.detach(), labels) # .detach()
-                d_fake_loss = adversarial_loss(validity_fake, fake)
+                d_fake_loss = self.adv_loss(validity_fake, fake)
                 
                 d_loss = (d_real_loss + d_fake_loss) / 2
                 
@@ -214,6 +219,7 @@ class LocalUpdate_GAN_raw(object): # GAN
             return gnet.state_dict(), dnet.state_dict(), sum(g_epoch_loss) / len(g_epoch_loss), sum(d_epoch_loss) / len(d_epoch_loss), optimizerG.state_dict(), optimizerD.state_dict() 
         except:
             return gnet.state_dict(), dnet.state_dict(), -1, -1
+                
 
 ##########################################
 #                   VAE                  #
@@ -338,7 +344,7 @@ class LocalUpdate_DCGAN(object): # DCGAN original
         d_epoch_loss = []
 
         # adversarial_loss = torch.nn.MSELoss()
-        BCE_loss = nn.BCELoss()
+        BCE_loss = nn.BCELoss().to(self.args.device)
 
         # label preprocess
         onehot = torch.zeros(10, 10)

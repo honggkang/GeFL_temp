@@ -59,8 +59,8 @@ parser.add_argument('--noniid', action='store_true') # default: false
 parser.add_argument('--dir_param', type=float, default=0.3)
 parser.add_argument('--num_classes', type=int, default=10)
 ### optimizer
-parser.add_argument('--bs', type=int, default=128, help="batch size to load testset")
-parser.add_argument('--local_bs', type=int, default=128, help='bs of real/syn training img and training GENs')
+parser.add_argument('--bs', type=int, default=64, help="batch size to load testset")
+parser.add_argument('--local_bs', type=int, default=64, help='bs of real/syn training img and training GENs')
 # parser.add_argument("--batch_size", type=int, default=32, help="size of the batches")
 parser.add_argument('--momentum', type=float, default=0)
 parser.add_argument('--weight_decay', type=float, default=0)
@@ -84,7 +84,7 @@ parser.add_argument('--avg_FE', type=bool, default=False)
 parser.add_argument('--sample_test', type=int, default=10) # local epochs for training generator
 parser.add_argument('--save_imgs', type=bool, default=True) # local epochs for training generator
 parser.add_argument('--wandb', type=bool, default=True)
-parser.add_argument('--name', type=str, default='under_dev') # L-A: bad character
+parser.add_argument('--name', type=str, default='dev') # L-A: bad character
 ### GAN parameters
 parser.add_argument("--b1", type=float, default=0.5, help="adam: decay of first order momentum of gradient")
 parser.add_argument("--b2", type=float, default=0.999, help="adam: decay of first order momentum of gradient")
@@ -97,10 +97,10 @@ args.img_shape = (args.output_channel, args.img_size, args.img_size)
 # args.feature_size = 32
 print(args)
 
-def normal_init(m, mean, std):
-    if isinstance(m, nn.ConvTranspose2d) or isinstance(m, nn.Conv2d):
-        m.weight.data.normal_(mean, std)
-        m.bias.data.zero_()
+# def normal_init(m, mean, std):
+#     if isinstance(m, nn.ConvTranspose2d) or isinstance(m, nn.Conv2d):
+#         m.weight.data.normal_(mean, std)
+#         m.bias.data.zero_()
 
 tf = transforms.Compose([transforms.Resize(args.img_size), transforms.ToTensor(),transforms.Normalize([0.5], [0.5])]) # mnist is already normalised 0 to 1
 train_data = datasets.MNIST(root='/home/hong/NeFL/.data/mnist', train=True, transform=tf, download=True) # VAE training data
@@ -130,7 +130,7 @@ def main():
     if not os.path.exists(filename):
         os.makedirs(filename)
     if args.wandb:
-        run = wandb.init(dir=filename, project='GeFL-DCGAN-orig-1028', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
+        run = wandb.init(dir=filename, project='GeFL-DCGAN-orig-1109', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
         wandb.config.update(args)
     # logger = get_logger(logpath=os.path.join(filename, 'logs'), filepath=os.path.abspath(__file__))
     
@@ -189,7 +189,7 @@ def main():
             sample_num = 40
             samples = gen_glob.sample_image_4visualization(sample_num)
             save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
-                        'imgFedDCGAN/' + str(args.name) + str(args.rs) + 'SynOrig_' + str(iter) + '.png', nrow=10)
+                        'imgs/imgFedDCGAN/' + str(args.name) + str(args.rs) + '_' + str(iter) + '.png', nrow=10)
             gen_glob.train()
         print('Warm-up Gen Round {:3d}, G Avg loss {:.3f}, D Avg loss {:.3f}'.format(iter, gloss_avg, dloss_avg))
 
@@ -263,16 +263,16 @@ def main():
                 sample_num = 40
                 samples = gen_glob.sample_image_4visualization(sample_num)
                 save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
-                            'imgFedDCGAN/' + str(args.name) + str(args.rs) + 'SynOrig_' + str(args.gen_wu_epochs+iter) + '.png', nrow=10)
+                            'imgs/imgFedDCGAN/' + str(args.name) + str(args.rs) + '_' + str(args.gen_wu_epochs+iter) + '.png', nrow=10)
                 gen_glob.train()
             print('Gen Round {:3d}, G Avg loss {:.3f}, D Avg loss {:.3f}'.format(args.gen_wu_epochs+iter, gloss_avg, dloss_avg))
         else:
             gloss_avg = -1
             dloss_avg = -1
 
-        if args.avg_FE:
+        if args.avg_FE: # LG-FedAVG
             ws_glob, w_comm = FedAvg_FE(args, ws_glob, ws_local, w_comm) # main net, feature extractor weight update
-        else:
+        else: # FedAVG
             ws_glob = FedAvg_FE_raw(args, ws_glob, ws_local)
 
         loss_avg = sum(loss_locals) / len(loss_locals)
@@ -308,7 +308,7 @@ def main():
                 })
                                     
     # print(best_perf, 'AVG'+str(args.rs), sum(best_perf)/len(best_perf))
-    # torch.save(gen_w_glob, 'models/save/FedDCGAN-F_generator.pt')
+    torch.save(gen_w_glob, 'checkpoint/FedDCGAN' + str(args.name) + str(args.rs) + '.pt')
 
     if args.wandb:
         run.finish()

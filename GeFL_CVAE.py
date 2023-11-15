@@ -113,7 +113,7 @@ def main():
     if not os.path.exists(filename):
         os.makedirs(filename)
     if args.wandb:
-        run = wandb.init(dir=filename, project='GeFL-CVAE-1028', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
+        run = wandb.init(dir=filename, project='GeFL-CVAE-1109', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
         wandb.config.update(args)
     # logger = get_logger(logpath=os.path.join(filename, 'logs'), filepath=os.path.abspath(__file__))
     
@@ -153,7 +153,7 @@ def main():
             sample_num = 40
             samples = gen_glob.sample_image_4visualization(sample_num)
             save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
-                        'imgFedCVAE/' + str(args.name)+ str(args.rs) +'SynOrig_' + str(iter) + '.png', nrow=10, normalize=True)
+                        'imgs/imgFedCVAE/' + str(args.name)+ str(args.rs) +'_' + str(iter) + '.png', nrow=10, normalize=True)
             gen_glob.train()
         print('Warm-up Gen Round {:3d}, Average loss {:.3f}'.format(iter, loss_avg))
 
@@ -215,7 +215,7 @@ def main():
                 sample_num = 40
                 samples = gen_glob.sample_image_4visualization(sample_num)
                 save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
-                            'imgFedCVAE/' + str(args.name)+ str(args.rs) +'SynOrig_' + str(iter) + '.png', nrow=10, normalize=True)
+                            'imgs/imgFedCVAE/' + str(args.name)+ str(args.rs) +'_' + str(iter) + '.png', nrow=10, normalize=True)
                 gen_glob.train()
             print('Gen Round {:3d}, Average loss {:.3f}'.format(args.gen_wu_epochs+iter, loss_avg))            
         else:
@@ -264,7 +264,9 @@ def main():
     #     samples = gen_glob.sample_image_4visualization(sample_num)
     #     save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
     #                 'imgFedCVAE/' + 'sample_' + str(args.dataset) + '.png', nrow=10)
-    
+
+    torch.save(gen_w_glob, 'checkpoint/FedCVAE' + str(args.name) + str(args.rs) + '.pt')
+        
     if args.wandb:
         run.finish()
 
