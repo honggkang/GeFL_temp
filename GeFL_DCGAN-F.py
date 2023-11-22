@@ -195,7 +195,7 @@ def main():
     else:
         w_comm = torch.load('models/save/Fed_cnn_common_net.pt') # common_net = FE_MLP.to(args.device)
     torch.save(w_comm, 'models/save/Fed' + '_'
-                + str(args.models) + '16_common_net.pt')
+                + str(args.models) + '16_common_net' + str(args.rs) + '.pt')
 
     common_net.load_state_dict(w_comm)
 
@@ -251,7 +251,7 @@ def main():
             sample_num = 40
             samples = gen_glob.sample_image_4visualization(sample_num)
             save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
-                        'imgFedDCGANF/' + str(args.name) + str(args.rs) + 'SynFeat_' + str(iter) + '.png', nrow=10)
+                        'imgFedDCGANF/' + str(args.name) + str(args.rs) + str(iter) + '.png', nrow=10)
             gen_glob.train()
         print('Warm-up Gen Round {:3d}, G Avg loss {:.3f}, D Avg loss {:.3f}'.format(iter, gloss_avg, dloss_avg))
 
@@ -301,7 +301,8 @@ def main():
                     else: # w/o generator
                         weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), feature_extractor=common_net, learning_rate=lr) # weights of models
             else: # C / E
-                local = LocalUpdate(args, dataset=dataset_train, idxs=dict_users[idx]) # synthetic data updates header & real data updates whole target network
+                 # synthetic data updates header & real data updates whole target network
+                local = LocalUpdate(args, dataset=dataset_train, idxs=dict_users[idx])
                 if args.aid_by_gen:
                     weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), gennet=copy.deepcopy(gen_glob), learning_rate=lr)
                 else:
@@ -333,7 +334,7 @@ def main():
                 sample_num = 40
                 samples = gen_glob.sample_image_4visualization(sample_num)
                 save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
-                            'imgFedDCGANF/' + str(args.name) + str(args.rs) + 'SynFeat_' + str(args.gen_wu_epochs+iter) + '.png', nrow=10)
+                            'imgFedDCGANF/' + str(args.name) + str(args.rs) + str(args.gen_wu_epochs+iter) + '.png', nrow=10)
                 gen_glob.train()
             print('Gen Round {:3d}, G Avg loss {:.3f}, D Avg loss {:.3f}'.format(args.gen_wu_epochs+iter, gloss_avg, dloss_avg))
         else:

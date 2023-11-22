@@ -79,18 +79,18 @@ summary(add, x, y_fill_)
 # summary(fedgen, x, label) # torchsummaryX
 
 ######### DDPM #########
-# from DDPM.ddpm32 import *
-# fedgen = DDPM(args, nn_model=ContextUnet(in_channels=args.output_channel, n_feat=args.n_feat, n_classes=args.num_classes),
-#                 betas=(1e-4, 0.02), drop_prob=0.1).to(args.device) # [transforms.ToTensor(),]
-# # fedgen.load_state_dict(torch.load('checkpoint/FedDDPM100_0.pt')) # evaluate over args.guide_w = 0, 2
-# fedgen.load_state_dict(torch.load('checkpoint/FedDDPM100_1.pt')) # evaluate over args.guide_w = 0, 2
-# # fedgen.load_state_dict(torch.load('checkpoint/FedDDPM100_2.pt')) # evaluate over args.guide_w = 0, 2
-# # summary(fedgen, x, c) # torchsummaryX
+from DDPM.ddpm32 import *
+fedgen = DDPM(args, nn_model=ContextUnet(in_channels=args.output_channel, n_feat=args.n_feat, n_classes=args.num_classes),
+                betas=(1e-4, 0.02), drop_prob=0.1).to(args.device) # [transforms.ToTensor(),]
+fedgen.load_state_dict(torch.load('checkpoint/FedDDPM320.pt')) # evaluate over args.guide_w = 0, 2
+# fedgen.load_state_dict(torch.load('checkpoint/FedDDPM321.pt')) # evaluate over args.guide_w = 0, 2
+# fedgen.load_state_dict(torch.load('checkpoint/FedDDPM322.pt')) # evaluate over args.guide_w = 0, 2
+summary(fedgen, x, c) # torchsummaryX
 
-######### image generation #########
-# fedgen.eval()
-# with torch.no_grad():
-#     img_batch, _ = fedgen.sample_image(args, sample_num=20) # outputs imgs of size (sample_num, 1*32*32)
-# img_batch = img_batch.view(-1, args.output_channel, args.img_size, args.img_size) # (sample_num, 1, 32, 32)
+######## image generation #########
+fedgen.eval()
+with torch.no_grad():
+    img_batch, _ = fedgen.sample_image(args, sample_num=20) # outputs imgs of size (sample_num, 1*32*32)
+img_batch = img_batch.view(-1, args.output_channel, args.img_size, args.img_size) # (sample_num, 1, 32, 32)
 
-# save_image(img_batch, 'imgs/imgFedGEN/SynOrig_Ex3' + '.png', nrow=10)
+save_image(img_batch, 'imgs/imgFedGEN/SynOrig_Ex3' + '.png', nrow=10)
