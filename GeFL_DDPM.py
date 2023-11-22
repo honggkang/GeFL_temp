@@ -64,7 +64,7 @@ parser.add_argument('--device_id', type=str, default='2')
 ### warming-up
 parser.add_argument('--gen_wu_epochs', type=int, default=100) # warm-up epochs
 
-parser.add_argument('--epochs', type=int, default=50)
+parser.add_argument('--epochs', type=int, default=0)
 parser.add_argument('--local_ep', type=int, default=5)
 parser.add_argument('--local_ep_gen', type=int, default=1)
 parser.add_argument('--gen_local_ep', type=int, default=5)
@@ -76,12 +76,12 @@ parser.add_argument('--avg_FE', type=bool, default=True) # LG-FedAvg
 ### logging
 parser.add_argument('--sample_test', type=int, default=10) # local epochs for training generator
 parser.add_argument('--save_imgs', type=bool, default=True) # local epochs for training generator
-parser.add_argument('--wandb', type=bool, default=True)
+parser.add_argument('--wandb', type=bool, default=False)
 parser.add_argument('--name', type=str, default='_') # L-A: bad character
 ### DDPM parameters
 parser.add_argument('--n_feat', type=int, default=128) # 128 ok, 256 better (but slower)
 parser.add_argument('--n_T', type=int, default=100) # 400, 500
-parser.add_argument('--guide_w', type=float, default=2.0) # 0, 0.5, 2
+parser.add_argument('--guide_w', type=float, default=0.0) # 0, 0.5, 2
 # ### N/A
 # parser.add_argument('--wu_epochs', type=int, default=0) # warm-up epochs N/A
 # parser.add_argument('--freeze_FE', type=bool, default=False)
@@ -97,6 +97,7 @@ else:
 train_data = datasets.MNIST(root='/home/hong/NeFL/.data/mnist', train=True, transform=tf, download=True) # VAE training data
 
 def main():
+    print(args)
     dataset_train, dataset_test = getDataset(args)
 
     if args.noniid:

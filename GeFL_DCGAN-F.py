@@ -77,8 +77,8 @@ parser.add_argument('--local_ep', type=int, default=5) # local epochs for traini
 parser.add_argument('--local_ep_gen', type=int, default=1) # local epochs for training main nets by generated samples
 parser.add_argument('--gen_local_ep', type=int, default=5) # local epochs for training generator
 
-parser.add_argument('--aid_by_gen', type=bool, default=False)
-parser.add_argument('--freeze_FE', type=bool, default=False)
+parser.add_argument('--aid_by_gen', type=bool, default=True)
+parser.add_argument('--freeze_FE', type=bool, default=True)
 parser.add_argument('--freeze_gen', type=bool, default=False)
 parser.add_argument('--only_gen', type=bool, default=False)
 parser.add_argument('--load_trained_FE', type=bool, default=False)
@@ -132,7 +132,7 @@ def main():
     if not os.path.exists(filename):
         os.makedirs(filename)
     if args.wandb:
-        run = wandb.init(dir=filename, project='GeFL-DCGAN16-1028', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
+        run = wandb.init(dir=filename, project='GeFL-DCGAN16-1122', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
         wandb.config.update(args)
     # logger = get_logger(logpath=os.path.join(filename, 'logs'), filepath=os.path.abspath(__file__))
     

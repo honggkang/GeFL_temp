@@ -53,7 +53,7 @@ parser.add_argument('--partial_data', type=float, default=0.1)
 ### model & feature size
 parser.add_argument('--models', type=str, default='cnn') # cnn, mlp
 parser.add_argument('--output_channel', type=int, default=1, help='channel size of image generator generates') # local epochs for training main nets by generated samples
-parser.add_argument('--img_size', type=int, default=16) # local epochs for training generator
+parser.add_argument('--img_size', type=int, default=32) # local epochs for training generator
 ### dataset
 parser.add_argument('--dataset', type=str, default='mnist') # stl10, cifar10, svhn, mnist, fmnist
 parser.add_argument('--noniid', action='store_true') # default: false
@@ -70,9 +70,9 @@ parser.add_argument('--rs', type=int, default=0)
 parser.add_argument('--num_experiment', type=int, default=3, help="the number of experiments")
 parser.add_argument('--device_id', type=str, default='3')
 ### warming-up
-parser.add_argument('--gen_wu_epochs', type=int, default=100) # warm-up epochs for generator
+parser.add_argument('--gen_wu_epochs', type=int, default=50) # warm-up epochs for generator
 
-parser.add_argument('--epochs', type=int, default=0) # total communication round (train main nets by (local samples and gen) + train gen)
+parser.add_argument('--epochs', type=int, default=50) # total communication round (train main nets by (local samples and gen) + train gen)
 parser.add_argument('--local_ep', type=int, default=5) # local epochs for training main nets by local samples
 parser.add_argument('--local_ep_gen', type=int, default=1) # local epochs for training main nets by generated samples
 parser.add_argument('--gen_local_ep', type=int, default=5) # local epochs for training generator
