@@ -30,7 +30,8 @@ from utils.average import *
 from utils.getData import *
 from utils.getModels import *
 
-from DDPM.ddpm28 import *
+from DDPM.ddpm32 import *
+# from DDPM.ddpm28 import *
 from utils.util import test_img, get_logger
 # from models import *
 # from utils.NeFedAvg import NeFedAvg
@@ -42,9 +43,9 @@ parser.add_argument('--num_users', type=int, default=10)
 parser.add_argument('--frac', type=float, default=1)
 parser.add_argument('--partial_data', type=float, default=0.1)
 ### model & feature size
-parser.add_argument('--models', type=str, default='mlp') # cnn, mlp 
+parser.add_argument('--models', type=str, default='cnn') # cnn, mlp 
 parser.add_argument('--output_channel', type=int, default=1) # local epochs for training generator
-parser.add_argument('--img_size', type=int, default=28) # local epochs for training generator
+parser.add_argument('--img_size', type=int, default=32) # local epochs for training generator
 ### dataset
 parser.add_argument('--dataset', type=str, default='mnist') # stl10, cifar10, svhn, mnist, emnist
 parser.add_argument('--noniid', action='store_true') # default: false
@@ -59,11 +60,11 @@ parser.add_argument('--weight_decay', type=float, default=0)
 ### reproducibility
 parser.add_argument('--rs', type=int, default=0)
 parser.add_argument('--num_experiment', type=int, default=3, help="the number of experiments")
-parser.add_argument('--device_id', type=str, default='0')
+parser.add_argument('--device_id', type=str, default='2')
 ### warming-up
 parser.add_argument('--gen_wu_epochs', type=int, default=100) # warm-up epochs
 
-parser.add_argument('--epochs', type=int, default=0)
+parser.add_argument('--epochs', type=int, default=50)
 parser.add_argument('--local_ep', type=int, default=5)
 parser.add_argument('--local_ep_gen', type=int, default=1)
 parser.add_argument('--gen_local_ep', type=int, default=5)
@@ -71,26 +72,28 @@ parser.add_argument('--gen_local_ep', type=int, default=5)
 parser.add_argument('--aid_by_gen', type=bool, default=True)
 parser.add_argument('--freeze_gen', type=bool, default=True)
 parser.add_argument('--only_gen', type=bool, default=False)
-parser.add_argument('--avg_FE', type=bool, default=True)
+parser.add_argument('--avg_FE', type=bool, default=True) # LG-FedAvg
 ### logging
 parser.add_argument('--sample_test', type=int, default=10) # local epochs for training generator
 parser.add_argument('--save_imgs', type=bool, default=True) # local epochs for training generator
-parser.add_argument('--wandb', type=bool, default=False)
-parser.add_argument('--name', type=str, default='0100') # L-A: bad character
+parser.add_argument('--wandb', type=bool, default=True)
+parser.add_argument('--name', type=str, default='_') # L-A: bad character
 ### DDPM parameters
 parser.add_argument('--n_feat', type=int, default=128) # 128 ok, 256 better (but slower)
 parser.add_argument('--n_T', type=int, default=100) # 400, 500
-parser.add_argument('--guide_w', type=float, default=0.0) # 0, 0.5, 2
-###
-parser.add_argument('--wu_epochs', type=int, default=0) # warm-up epochs N/A
-parser.add_argument('--freeze_FE', type=bool, default=False)
+parser.add_argument('--guide_w', type=float, default=2.0) # 0, 0.5, 2
+# ### N/A
+# parser.add_argument('--wu_epochs', type=int, default=0) # warm-up epochs N/A
+# parser.add_argument('--freeze_FE', type=bool, default=False)
 
 args = parser.parse_args()
 args.device = 'cuda:' + args.device_id
 args.img_shape = (args.output_channel, args.img_size, args.img_size)
 
-# tf = transforms.Compose([transforms.ToTensor(),transforms.Resize(32),]) # mnist is already normalised 0 to 1
-tf = transforms.Compose([transforms.ToTensor(),]) # mnist is already normalised 0 to 1
+if args.img_size==32:
+    tf = transforms.Compose([transforms.ToTensor(),transforms.Resize(32),]) # mnist is already normalised 0 to 1
+else:
+    tf = transforms.Compose([transforms.ToTensor(),]) # mnist is already normalised 0 to 1
 train_data = datasets.MNIST(root='/home/hong/NeFL/.data/mnist', train=True, transform=tf, download=True) # VAE training data
 
 def main():
@@ -119,7 +122,7 @@ def main():
         os.makedirs(filename)
 
     if args.wandb:
-        run = wandb.init(dir=filename, project='GeFL-DDPM32-1028', name= str(args.name)+ 'w' +str(args.guide_w) + '_' + str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
+        run = wandb.init(dir=filename, project='GeFL-DDPM32-1120', name= str(args.name)+ 'w' +str(args.guide_w) + '_' + str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
         wandb.config.update(args)
     # logger = get_logger(logpath=os.path.join(filename, 'logs'), filepath=os.path.abspath(__file__))
     
@@ -166,7 +169,7 @@ def main():
             sample_num = 40
             samples = gen_glob.sample_image_4visualization(sample_num, guide_w=args.guide_w)
             save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
-                        'imgFedDDPM/' + str(args.name) + str(args.rs) + 'Orig32_' + str(iter) + '.png', nrow=10) # , normalize=True
+                        'imgs/imgFedDDPM/' + str(args.name) + 'w' +str(args.guide_w) + '_' + str(args.rs) + '_' + str(args.img_size) + '_' + str(iter) + '.png', nrow=10) # , normalize=True
             gen_glob.train()
         print('Warm-up GEN Round {:3d}, G Avg loss {:.3f}'.format(iter, gloss_avg))
 
@@ -226,7 +229,7 @@ def main():
                 sample_num = 40
                 samples = gen_glob.sample_image_4visualization(sample_num, guide_w=args.guide_w)                    
                 save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
-                            'imgFedDDPM/' + str(args.name) + str(args.rs) + 'Orig32_' + str(args.gen_wu_epochs +iter) + '.png', nrow=10, normalize=True)
+                            'imgs/imgFedDDPM/' + str(args.name) + str(args.rs) + 'Orig32_' + str(args.gen_wu_epochs +iter) + '.png', nrow=10, normalize=True)
                 gen_glob.train()
             print('GEN Round {:3d}, G Avg loss {:.3f}'.format(args.gen_wu_epochs + iter, gloss_avg))
 
@@ -244,7 +247,7 @@ def main():
         print('Round {:3d}, Average loss {:.3f}, Average loss by Gen {:.3f}, DDPM Average loss {:.3f}'.format(iter, loss_avg, gen_loss_avg, gloss_avg))
 
         loss_train.append(loss_avg)
-        if iter % args.sample_test == 0 or iter == args.epochs:
+        if iter == 1 or iter % args.sample_test == 0 or iter == args.epochs:
             acc_test_tot = []
             for i in range(args.num_models):
                 model_e = local_models[i]
@@ -258,12 +261,12 @@ def main():
                 print("Testing accuracy " + str(i) + ": {:.2f}".format(acc_test))
                 if args.wandb:
                     wandb.log({
-                        "Communication round": args.wu_epochs+iter,
+                        "Communication round": iter,
                         "Local model " + str(i) + " test accuracy": acc_test
                     })
             if args.wandb:
                 wandb.log({
-                    "Communication round": args.wu_epochs+iter,
+                    "Communication round": iter,
                     "Mean test accuracy": sum(acc_test_tot) / len(acc_test_tot)
                 })
 

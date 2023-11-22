@@ -26,7 +26,13 @@ class LocalUpdate(object):
         self.loss_func = nn.CrossEntropyLoss()
         self.selected_clients = []
         self.ldr_train = DataLoader(DatasetSplit(dataset, idxs), batch_size=args.local_bs, shuffle=True)
-        self.iter = len(idxs)//args.local_bs
+        if len(idxs)//args.local_bs == 0:
+            self.iter = 1
+            self.less_samples = True
+            self.mini_bs = len(idxs)
+        else:
+            self.iter = len(idxs)//args.local_bs
+            self.less_samples = False
         
     def train(self, net, learning_rate, gennet=None):
         net.train()
@@ -43,7 +49,10 @@ class LocalUpdate(object):
         
                 for i in range(self.iter):
                     with torch.no_grad():
-                        images, labels = gennet.sample_image(self.args, sample_num=self.args.local_bs) # images.shape (bs, feature^2)
+                        if self.less_samples:
+                            images, labels = gennet.sample_image(self.args, sample_num=self.mini_bs) # images.shape (bs, feature^2)
+                        else:
+                            images, labels = gennet.sample_image(self.args, sample_num=self.args.local_bs) # images.shape (bs, feature^2)
                     net.zero_grad()
                     logits, log_probs = net(images)
                     loss = F.cross_entropy(logits, labels) # net.fc1.weight.grad / net.fc5.weight.grad
@@ -326,7 +335,7 @@ class LocalUpdate_DCGAN(object): # DCGAN original
     def __init__(self, args, dataset=None, idxs=None):
         self.args = args
         # self.loss_func = nn.CrossEntropyLoss()
-        self.ldr_train = DataLoader(DatasetSplit(dataset, idxs), batch_size=args.local_bs, shuffle=True, drop_last=True)
+        self.ldr_train = DataLoader(DatasetSplit(dataset, idxs), batch_size=args.local_bs, shuffle=True) # , drop_last=True
         
     def train(self, gnet, dnet, iter, optg=None, optd=None):
         gnet.train()
@@ -339,6 +348,15 @@ class LocalUpdate_DCGAN(object): # DCGAN original
             G_optimizer.load_state_dict(optg)
         if optd:
             D_optimizer.load_state_dict(optd)
+
+        # if iter == int(0.5*self.args.gen_wu_epochs):
+        #     G_optimizer.param_groups[0]['lr'] /= 10
+        #     D_optimizer.param_groups[0]['lr'] /= 10
+        #     print("learning rate change!")
+        # elif iter == int(0.75*self.args.gen_wu_epochs):
+        #     G_optimizer.param_groups[0]['lr'] /= 10
+        #     D_optimizer.param_groups[0]['lr'] /= 10
+        #     print("learning rate change!")
 
         g_epoch_loss = []
         d_epoch_loss = []
@@ -356,10 +374,6 @@ class LocalUpdate_DCGAN(object): # DCGAN original
         for i in range(10):
             fill[i, i, :, :] = 1
 
-        y_real_ = torch.ones(batch_size)
-        y_fake_ = torch.zeros(batch_size)
-        y_real_, y_fake_ = Variable(y_real_.cuda()), Variable(y_fake_.cuda())
-        y_real_, y_fake_ = y_real_.to(self.args.device), y_fake_.to(self.args.device)
 
         for iter in range(self.args.gen_local_ep):
             D_losses = []
@@ -367,14 +381,10 @@ class LocalUpdate_DCGAN(object): # DCGAN original
             D_fake_losses = []
             G_losses = []
 
-            if iter == int(0.5*self.args.gen_wu_epochs):
-                G_optimizer.param_groups[0]['lr'] /= 10
-                D_optimizer.param_groups[0]['lr'] /= 10
-                print("learning rate change!")
-            elif iter == int(0.75*self.args.gen_wu_epochs):
-                G_optimizer.param_groups[0]['lr'] /= 10
-                D_optimizer.param_groups[0]['lr'] /= 10
-                print("learning rate change!")
+            y_real_ = torch.ones(batch_size)
+            y_fake_ = torch.zeros(batch_size)
+            y_real_, y_fake_ = Variable(y_real_.cuda()), Variable(y_fake_.cuda())
+            y_real_, y_fake_ = y_real_.to(self.args.device), y_fake_.to(self.args.device)
                 
             for batch_idx, (x_, y_) in enumerate(self.ldr_train):
                 ''' ---------------------------------
@@ -465,7 +475,7 @@ def loss_function_cvae(x, pred, mu, logvar):
 class LocalUpdate_CVAE(object): # CVAE raw
     def __init__(self, args, dataset=None, idxs=None):
         self.args = args
-        self.ldr_train = DataLoader(DatasetSplit(dataset, idxs), batch_size=args.local_bs, shuffle=True, drop_last=True)
+        self.ldr_train = DataLoader(DatasetSplit(dataset, idxs), batch_size=args.local_bs, shuffle=True) # , drop_last=True
 
     def train(self, net, opt=None):
         net.train()
@@ -497,4 +507,5 @@ class LocalUpdate_CVAE(object): # CVAE raw
                 batch_loss.append(loss.item())
             # epoch_loss.append(sum(batch_loss)/len(batch_loss))
             epoch_loss.append(train_loss/len(self.ldr_train.dataset))
+        # net.to('cpu')
         return net.state_dict(), sum(epoch_loss) / len(epoch_loss), optimizer.state_dict()

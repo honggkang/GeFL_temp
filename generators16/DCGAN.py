@@ -57,12 +57,20 @@ class generator(nn.Module):
 
     # forward method
     def forward(self, input, label):
-        x = F.leaky_relu(self.deconv1_1_bn(self.deconv1_1(input)), 0.2) # 256 x 4 x 4
-        y = F.leaky_relu(self.deconv1_2_bn(self.deconv1_2(label)), 0.2) # 256 x 4 x 4
-        x = torch.cat([x, y], 1) # 512 x 4 x 4
-        x = F.leaky_relu(self.deconv2_bn(self.deconv2(x)), 0.2) # 256 x 8 x 8
+        x = F.leaky_relu(self.deconv1_1_bn(self.deconv1_1(input)), 0.2) # 256 x 4 x 4 (d=128) / 128 x 4 x 4 (d=64)
+        y = F.leaky_relu(self.deconv1_2_bn(self.deconv1_2(label)), 0.2) # 256 x 4 x 4 (d=128) / 128 x 4 x 4 (d=64)
+        x = torch.cat([x, y], 1) # 512 x 4 x 4 (d=128) / 256 x 4 x 4 (d=64)
+        x = F.leaky_relu(self.deconv2_bn(self.deconv2(x)), 0.2) # 256 x 8 x 8 / 128 x 8 x 8 (d=64)
         # x = torch.tanh(self.deconv5(x)) # 1 x 16 x 16
         x = F.relu(self.deconv5(x)) # 3 x 16 x 16
+
+        # x = F.relu(self.deconv1_1_bn(self.deconv1_1(input))) # 256 x 4 x 4
+        # y = F.relu(self.deconv1_2_bn(self.deconv1_2(label))) # 256 x 4 x 4
+        # x = torch.cat([x, y], 1) # 512 x 4 x 4
+        # x = F.relu(self.deconv2_bn(self.deconv2(x))) # 256 x 8 x 8
+        # # x = torch.tanh(self.deconv5(x)) # 1 x 16 x 16
+        # x = F.relu(self.deconv5(x)) # 3 x 16 x 16
+
         '''
         Note: tanh generates -1~1 and sigmoid generates 0~1
         - Positive vales that exceed 1 were observed for feature images (Why?)

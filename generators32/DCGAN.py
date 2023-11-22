@@ -39,10 +39,13 @@ class generator(nn.Module):
         self.deconv1_1_bn = nn.BatchNorm2d(d*2)
         self.deconv1_2 = nn.ConvTranspose2d(10, d*2, 4, 1, 0)
         self.deconv1_2_bn = nn.BatchNorm2d(d*2)
+        
         self.deconv2 = nn.ConvTranspose2d(d*4, d*2, 4, 2, 1)
         self.deconv2_bn = nn.BatchNorm2d(d*2)
+        
         self.deconv3 = nn.ConvTranspose2d(d*2, d, 4, 2, 1)
         self.deconv3_bn = nn.BatchNorm2d(d)
+        
         self.deconv4 = nn.ConvTranspose2d(d, 1, 4, 2, 1)
         # self.deconv5 = nn.ConvTranspose2d(d*2, args.output_channel, 4, 2, 1)
         

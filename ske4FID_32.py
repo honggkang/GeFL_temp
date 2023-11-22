@@ -50,7 +50,7 @@ c = Variable(LongTensor(np.random.randint(0, args.num_classes, bs)))
 from generators32.DCGAN import *
 fedgen = generator(args, d=128).to(args.device)
 add = discriminator(args, d=128).to(args.device)
-fedgen.load_state_dict(torch.load('checkpoint/FedDCGANupdateGEN0.pt'))
+# fedgen.load_state_dict(torch.load('checkpoint/FedDCGANupdateGEN0.pt'))
 # fedgen.load_state_dict(torch.load('checkpoint/FedDCGANupdateGEN1.pt'))
 # fedgen.load_state_dict(torch.load('checkpoint/FedDCGANupdateGEN2.pt'))
 onehot = torch.zeros(10, 10)
@@ -63,8 +63,8 @@ for i in range(10):
     fill[i, i, :, :] = 1
 y_fill_ = fill[y_]
 y_fill_ = Variable(y_fill_.cuda())
-# summary(fedgen, z, y_label_) # torchsummaryX
-# summary(add, x, y_fill_)
+summary(fedgen, z, y_label_) # torchsummaryX
+summary(add, x, y_fill_)
 
 ######### CVAE #########
 # from generators32.CCVAE import *
@@ -82,14 +82,15 @@ y_fill_ = Variable(y_fill_.cuda())
 # from DDPM.ddpm32 import *
 # fedgen = DDPM(args, nn_model=ContextUnet(in_channels=args.output_channel, n_feat=args.n_feat, n_classes=args.num_classes),
 #                 betas=(1e-4, 0.02), drop_prob=0.1).to(args.device) # [transforms.ToTensor(),]
-# fedgen.load_state_dict(torch.load('checkpoint/FedDDPM1000.pt')) # evaluate over args.guide_w = 0, 2
-# fedgen.load_state_dict(torch.load('checkpoint/FedDDPM1001.pt')) # evaluate over args.guide_w = 0, 2
-# fedgen.load_state_dict(torch.load('checkpoint/FedDDPM1002.pt')) # evaluate over args.guide_w = 0, 2
-# summary(fedgen, x, c) # torchsummaryX
+# # fedgen.load_state_dict(torch.load('checkpoint/FedDDPM100_0.pt')) # evaluate over args.guide_w = 0, 2
+# fedgen.load_state_dict(torch.load('checkpoint/FedDDPM100_1.pt')) # evaluate over args.guide_w = 0, 2
+# # fedgen.load_state_dict(torch.load('checkpoint/FedDDPM100_2.pt')) # evaluate over args.guide_w = 0, 2
+# # summary(fedgen, x, c) # torchsummaryX
 
-fedgen.eval()
-with torch.no_grad():
-    img_batch, _ = fedgen.sample_image(args, sample_num=10) # outputs imgs of size (sample_num, 1*32*32)
-img_batch = img_batch.view(-1, args.output_channel, args.img_size, args.img_size) # (sample_num, 1, 32, 32)
+######### image generation #########
+# fedgen.eval()
+# with torch.no_grad():
+#     img_batch, _ = fedgen.sample_image(args, sample_num=20) # outputs imgs of size (sample_num, 1*32*32)
+# img_batch = img_batch.view(-1, args.output_channel, args.img_size, args.img_size) # (sample_num, 1, 32, 32)
 
-save_image(img_batch, 'imgs/imgFedGEN/SynOrig_Ex1' + '.png', nrow=10, normalize=True)
+# save_image(img_batch, 'imgs/imgFedGEN/SynOrig_Ex3' + '.png', nrow=10)

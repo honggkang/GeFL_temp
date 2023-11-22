@@ -25,12 +25,12 @@ parser.add_argument("--latent_size", type=int, default=20, help="dimensionality 
 ### DDPM parameters
 parser.add_argument('--n_feat', type=int, default=128)
 parser.add_argument('--n_T', type=int, default=100)
-parser.add_argument('--guide_w', type=float, default=0)  # 0, 0.5, 2
+parser.add_argument('--guide_w', type=float, default=2)  # 0, 0.5, 2
 ### CUDA
-parser.add_argument('--device_id', type=str, default='3')
+parser.add_argument('--device_id', type=str, default='0')
 ### Parameters for FID
-parser.add_argument('--gen', type=str, default='cvae')  # gan(GAN), vae(VAE), ddpm(DDPM)
-parser.add_argument('--gen_dir', type=str, default='checkpoint/FedCVAEfreezeGEN1.pt')
+parser.add_argument('--gen', type=str, default='ddpm')  # gan(GAN), vae(VAE), ddpm(DDPM)
+parser.add_argument('--gen_dir', type=str, default='checkpoint/FedDDPM100_2.pt')
 parser.add_argument('--img_dir', type=str, default='imgs/')
 
 args = parser.parse_args()
@@ -219,7 +219,8 @@ elif args.gen == "cvae" or args.gen == "CVAE":
 
 ######### DDPM #########
 elif args.gen == "ddpm" or args.gen == "DDPM":
-    from DDPM.ddpm28 import *
+    # from DDPM.ddpm28 import *
+    from DDPM.ddpm32 import *
 
     fedgen = DDPM(args,
                   nn_model=ContextUnet(in_channels=args.output_channel, n_feat=args.n_feat, n_classes=args.num_classes),

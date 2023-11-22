@@ -42,7 +42,7 @@ from utils.util import test_img, get_logger
 
 parser = argparse.ArgumentParser()
 ### clients
-parser.add_argument('--num_users', type=int, default=10)
+parser.add_argument('--num_users', type=int, default=100)
 parser.add_argument('--frac', type=float, default=1)
 parser.add_argument('--partial_data', type=float, default=0.1)
 ### model & feature size
@@ -73,8 +73,8 @@ parser.add_argument('--local_ep', type=int, default=5)
 parser.add_argument('--local_ep_gen', type=int, default=1) # local epochs for training main nets by generated samples
 parser.add_argument('--gen_local_ep', type=int, default=5) # local epochs for training generator
 
-parser.add_argument('--aid_by_gen', type=bool, default=False)
-parser.add_argument('--freeze_gen', type=bool, default=False)
+parser.add_argument('--aid_by_gen', type=bool, default=True)
+parser.add_argument('--freeze_gen', type=bool, default=True)
 parser.add_argument('--only_gen', type=bool, default=False)
 parser.add_argument('--avg_FE', type=bool, default=True)
 ### logging
@@ -113,7 +113,7 @@ def main():
     if not os.path.exists(filename):
         os.makedirs(filename)
     if args.wandb:
-        run = wandb.init(dir=filename, project='GeFL-CVAE-1109', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
+        run = wandb.init(dir=filename, project='GeFL-CVAE-1120', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
         wandb.config.update(args)
     # logger = get_logger(logpath=os.path.join(filename, 'logs'), filepath=os.path.abspath(__file__))
     
@@ -141,7 +141,7 @@ def main():
 
             local = LocalUpdate_CVAE(args, dataset=dataset_train, idxs=dict_users[idx])
             gen_weight, loss, opts[idx] = local.train(net=copy.deepcopy(gen_glob), opt=opts[idx])
-
+            # gen_weight.to('cpu')
             gen_w_local.append(copy.deepcopy(gen_weight))
             loss_locals.append(loss)
         
@@ -234,7 +234,7 @@ def main():
         print('Round {:3d}, Average loss {:.3f}, Average loss by Gen {:.3f}, VAE Avg loss {:.3f}'.format(iter, loss_avg, gen_loss_avg, gloss_avg))
 
         loss_train.append(loss_avg)
-        if iter % args.sample_test == 0 or iter == args.epochs:
+        if iter == 1 or iter % args.sample_test == 0 or iter == args.epochs:
             acc_test_tot = []
             for i in range(args.num_models):
                 model_e = local_models[i]

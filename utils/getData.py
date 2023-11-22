@@ -130,14 +130,15 @@ def noniid_dir(args, beta, dataset):
 
     while min_size < min_require_size:
         idx_batch = [[] for _ in range(args.num_users)]
-        for k in range(args.num_classes):
+        for k in range(args.num_classes): # class-by-class
             idx_k = np.where(labels == k)[0]
             np.random.shuffle(idx_k)
-            proportions = np.random.dirichlet(np.repeat(beta, args.num_users))
+            proportions = np.random.dirichlet(np.repeat(beta, args.num_users)) # same beta for all users
             # logger.info("proportions1: ", proportions)
             # logger.info("sum pro1:", np.sum(proportions))
             ## Balance
             proportions = np.array([p * (len(idx_j) < N / args.num_users) for p, idx_j in zip(proportions, idx_batch)])
+            # p*True = p / p*False = 0
             # logger.info("proportions2: ", proportions)
             proportions = proportions / proportions.sum()
             # logger.info("proportions3: ", proportions)
@@ -176,13 +177,13 @@ def getDataset(args):
     elif args.dataset == 'mnist' and 'cnn' in args.models:
         transform_train = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Resize(32),
+            transforms.Resize(args.img_size),
             # transforms.Normalize((0.1307,), (0.3081,)), # DCGAN 0.5
         ])
 
         transform_test = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Resize(32),
+            transforms.Resize(args.img_size),
             # transforms.Normalize((0.1307,), (0.3081,)), # DCGAN 0.5
         ])
         

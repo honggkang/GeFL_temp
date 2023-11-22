@@ -44,7 +44,7 @@ parser.add_argument('--partial_data', type=float, default=0.1)
 ### model & feature size
 parser.add_argument('--models', type=str, default='mlp') # cnn, mlp
 parser.add_argument('--output_channel', type=int, default=1, help='channel size of image generator generates') # local epochs for training main nets by generated samples
-parser.add_argument('--img_size', type=int, default=28) # local epochs for training generator
+parser.add_argument('--img_size', type=int, default=14) # local epochs for training generator
 ### dataset
 parser.add_argument('--dataset', type=str, default='mnist') # stl10, cifar10, svhn, mnist, fmnist
 parser.add_argument('--noniid', action='store_true') # default: false
@@ -56,7 +56,7 @@ parser.add_argument('--local_bs', type=int, default=64)
 parser.add_argument('--momentum', type=float, default=0)
 parser.add_argument('--weight_decay', type=float, default=0)
 ### reproducibility
-parser.add_argument('--rs', type=int, default=12)
+parser.add_argument('--rs', type=int, default=3)
 parser.add_argument('--num_experiment', type=int, default=1, help="the number of experiments")
 parser.add_argument('--device_id', type=str, default='1')
 ### warming-up
@@ -75,7 +75,7 @@ parser.add_argument('--avg_FE', type=bool, default=True)
 parser.add_argument('--sample_test', type=int, default=20) # local epochs for training generator
 parser.add_argument('--save_imgs', type=bool, default=True) # local epochs for training generator
 parser.add_argument('--wandb', type=bool, default=False)
-parser.add_argument('--name', type=str, default='1uINIT') # L-A: bad character
+parser.add_argument('--name', type=str, default='1u_14') # L-A: bad character
 ### GAN parameters
 parser.add_argument("--b1", type=float, default=0.5, help="adam: decay of first order momentum of gradient")
 parser.add_argument("--b2", type=float, default=0.999, help="adam: decay of first order momentum of gradient")
