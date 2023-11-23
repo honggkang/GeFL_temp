@@ -54,6 +54,7 @@ parser.add_argument('--partial_data', type=float, default=0.1)
 parser.add_argument('--models', type=str, default='cnn') # cnn, mlp
 parser.add_argument('--output_channel', type=int, default=1, help='channel size of image generator generates') # local epochs for training main nets by generated samples
 parser.add_argument('--img_size', type=int, default=32) # local epochs for training generator
+parser.add_argument('--orig_img_size', type=int, default=32) # local epochs for training generator
 ### dataset
 parser.add_argument('--dataset', type=str, default='mnist') # stl10, cifar10, svhn, mnist, fmnist
 parser.add_argument('--noniid', action='store_true') # default: false

@@ -50,6 +50,7 @@ parser.add_argument('--partial_data', type=float, default=0.1)
 parser.add_argument('--models', type=str, default='cnn') # cnn, mlp 
 parser.add_argument('--output_channel', type=int, default=3) # local epochs for training generator
 parser.add_argument('--img_size', type=int, default=16) # local epochs for training generator
+parser.add_argument('--orig_img_size', type=int, default=32) # local epochs for training generator
 ### dataset
 parser.add_argument('--dataset', type=str, default='mnist') # stl10, cifar10, svhn, mnist, emnist
 parser.add_argument('--noniid', action='store_true') # default: false
@@ -67,16 +68,16 @@ parser.add_argument('--num_experiment', type=int, default=3, help="the number of
 parser.add_argument('--device_id', type=str, default='0')
 ### warming-up
 parser.add_argument('--wu_epochs', type=int, default=20) # warm-up epochs
-parser.add_argument('--gen_wu_epochs', type=int, default=50) # warm-up epochs
+parser.add_argument('--gen_wu_epochs', type=int, default=100) # warm-up epochs
 
 parser.add_argument('--epochs', type=int, default=50)
 parser.add_argument('--local_ep', type=int, default=5)
 parser.add_argument('--local_ep_gen', type=int, default=1)
 parser.add_argument('--gen_local_ep', type=int, default=5)
 
-parser.add_argument('--aid_by_gen', type=bool, default=False)
-parser.add_argument('--freeze_FE', type=bool, default=False)
-parser.add_argument('--freeze_gen', type=bool, default=False)
+parser.add_argument('--aid_by_gen', type=bool, default=True)
+parser.add_argument('--freeze_FE', type=bool, default=True)
+parser.add_argument('--freeze_gen', type=bool, default=True)
 parser.add_argument('--only_gen', type=bool, default=False)
 parser.add_argument('--load_trained_FE', type=bool, default=False)
 parser.add_argument('--avg_FE', type=bool, default=True)
@@ -119,7 +120,7 @@ def main():
         os.makedirs(filename)
 
     if args.wandb:
-        run = wandb.init(dir=filename, project='GeFL-DDPMF16-1028', name= str(args.name)+ str(args.rs) +'w'+str(args.guide_w), reinit=True, settings=wandb.Settings(code_dir="."))
+        run = wandb.init(dir=filename, project='GeFL-DDPMF16-1122', name= str(args.name)+ str(args.rs) +'w'+str(args.guide_w), reinit=True, settings=wandb.Settings(code_dir="."))
         wandb.config.update(args)
     # logger = get_logger(logpath=os.path.join(filename, 'logs'), filepath=os.path.abspath(__file__))
     
@@ -179,8 +180,8 @@ def main():
                         "Communication round": iter,
                         "Mean test accuracy": sum(acc_test_tot) / len(acc_test_tot)
                     })
-        torch.save(w_comm, 'models/save/Fed' + '_'
-                    + str(args.models) + '16_common_net.pt')
+        torch.save(w_comm, 'models/save/FedDDPM' + str(args.guide_w) + '_'
+                + str(args.models) + '16_common_net' + str(args.rs) + '.pt')
     else:
         w_comm = torch.load('models/save/Fed_cnn_common_net.pt') # common_net = FE_MLP.to(args.device)
 
@@ -226,7 +227,7 @@ def main():
             sample_num = 40
             samples = gen_glob.sample_image_4visualization(sample_num, guide_w=args.guide_w)
             save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
-                        'imgFedDDPMF/' + str(args.name)+ str(args.rs) + 'Feat16_' + str(iter) + '.png', nrow=10, normalize=True)
+                        'imgs/imgFedDDPMF/' + str(args.name)+ str(args.rs) + 'w_' + str(args.guide_w) + str(iter) + '.png', nrow=10, normalize=True)
             gen_glob.train()
         print('Warm-up Gen Round {:3d}, Average loss {:.3f}'.format(iter, gloss_avg))
 
@@ -290,9 +291,9 @@ def main():
                 if args.save_imgs and (iter % args.sample_test == 0 or iter == args.epochs):
                     gen_glob.eval()
                     sample_num = 40
-                    samples = gen_glob.sample_image_4visualization(sample_num)
+                    samples = gen_glob.sample_image_4visualization(sample_num, guide_w=args.guide_w)
                     save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
-                        'imgFedDDPMF/' + str(args.name)+ str(args.rs) + 'Feat16_' + str(iter) + '.png', nrow=10, normalize=True)
+                        'imgs/imgFedDDPMF/' + str(args.name)+ str(args.rs) + 'w_' + str(args.guide_w) + str(iter) + '.png', nrow=10, normalize=True)
                     gen_glob.train()
         if args.aid_by_gen and not args.freeze_gen:
             gloss_avg = sum(gloss_locals) / len(gloss_locals)

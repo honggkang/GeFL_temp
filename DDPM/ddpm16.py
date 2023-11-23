@@ -113,9 +113,11 @@ class ContextUnet(nn.Module):
         self.init_conv = ResidualConvBlock(in_channels, n_feat, is_res=True)
 
         self.down1 = UnetDown(n_feat, n_feat)
-        # self.down2 = UnetDown(n_feat, 2 * n_feat)
+        # self.down1 = UnetDown(n_feat, 2 * n_feat)
+        self.down2 = UnetDown(n_feat, 2 * n_feat)
 
-        self.to_vec = nn.Sequential(nn.AvgPool2d(8), nn.GELU())
+        # self.to_vec = nn.Sequential(nn.AvgPool2d(8), nn.GELU())
+        self.to_vec = nn.Sequential(nn.AvgPool2d(4), nn.GELU())
 
         self.timeembed1 = EmbedFC(1, 2*n_feat)
         self.timeembed2 = EmbedFC(1, 1*n_feat)
@@ -125,13 +127,14 @@ class ContextUnet(nn.Module):
         self.up0 = nn.Sequential(
             # nn.ConvTranspose2d(6 * n_feat, 2 * n_feat, 7, 7), # when concat temb and cemb end up w 6*n_feat
             # nn.ConvTranspose2d(2 * n_feat, 2 * n_feat, 7, 7), # otherwise just have 2*n_feat
-            nn.ConvTranspose2d(n_feat, n_feat, 8, 8),
+            # nn.ConvTranspose2d(2 * n_feat, 2 * n_feat, 4, 4),
+            nn.ConvTranspose2d(2 * n_feat, 2 * n_feat, 4, 4),
             # nn.GroupNorm(8, 2 * n_feat),
-            nn.GroupNorm(8, n_feat),
+            nn.GroupNorm(4, 2*n_feat),
             nn.ReLU(),
         )
 
-        # self.up1 = UnetUp(4 * n_feat, n_feat)
+        self.up1 = UnetUp(4 * n_feat, n_feat)
         self.up2 = UnetUp(2 * n_feat, n_feat)
         self.out = nn.Sequential(
             nn.Conv2d(2 * n_feat, n_feat, 3, 1, 1),
@@ -146,11 +149,9 @@ class ContextUnet(nn.Module):
 
         x = self.init_conv(x)
         down1 = self.down1(x)
-        '''
         down2 = self.down2(down1)
         hiddenvec = self.to_vec(down2)
-        '''
-        hiddenvec = self.to_vec(down1) # added
+        # hiddenvec = self.to_vec(down1) # added
         
         # convert context to one hot embedding
         c = nn.functional.one_hot(c, num_classes=self.n_classes).type(torch.float)
@@ -172,11 +173,9 @@ class ContextUnet(nn.Module):
 
         up1 = self.up0(hiddenvec)
         # up2 = self.up1(up1, down2) # if want to avoid add and multiply embeddings
-        '''
         up2 = self.up1(cemb1*up1+ temb1, down2)  # add and multiply embeddings
         up3 = self.up2(cemb2*up2+ temb2, down1)        
-        '''
-        up3 = self.up2(cemb2*up1+temb2, down1)
+        # up3 = self.up2(cemb2*up1+temb2, down1)
         out = self.out(torch.cat((up3, x), 1))
         return out
     

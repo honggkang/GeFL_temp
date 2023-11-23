@@ -47,24 +47,24 @@ c = Variable(LongTensor(np.random.randint(0, args.num_classes, bs)))
 
 
 ######### DCGAN #########
-from generators32.DCGAN import *
-fedgen = generator(args, d=128).to(args.device)
-add = discriminator(args, d=128).to(args.device)
-# fedgen.load_state_dict(torch.load('checkpoint/FedDCGANupdateGEN0.pt'))
-# fedgen.load_state_dict(torch.load('checkpoint/FedDCGANupdateGEN1.pt'))
-# fedgen.load_state_dict(torch.load('checkpoint/FedDCGANupdateGEN2.pt'))
-onehot = torch.zeros(10, 10)
-onehot = onehot.scatter_(1, torch.LongTensor([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]).view(10,1), 1).view(10, 10, 1, 1) # 10 x 10 eye matrix
-y_ = (torch.rand(bs, 1) * 10).type(torch.LongTensor).squeeze()
-y_label_ = onehot[y_]
-y_label_ = Variable(y_label_.cuda())
-fill = torch.zeros([10, 10, args.img_size, args.img_size])
-for i in range(10):
-    fill[i, i, :, :] = 1
-y_fill_ = fill[y_]
-y_fill_ = Variable(y_fill_.cuda())
-summary(fedgen, z, y_label_) # torchsummaryX
-summary(add, x, y_fill_)
+# from generators32.DCGAN import *
+# fedgen = generator(args, d=128).to(args.device)
+# add = discriminator(args, d=128).to(args.device)
+# # fedgen.load_state_dict(torch.load('checkpoint/FedDCGANupdateGEN0.pt'))
+# # fedgen.load_state_dict(torch.load('checkpoint/FedDCGANupdateGEN1.pt'))
+# # fedgen.load_state_dict(torch.load('checkpoint/FedDCGANupdateGEN2.pt'))
+# onehot = torch.zeros(10, 10)
+# onehot = onehot.scatter_(1, torch.LongTensor([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]).view(10,1), 1).view(10, 10, 1, 1) # 10 x 10 eye matrix
+# y_ = (torch.rand(bs, 1) * 10).type(torch.LongTensor).squeeze()
+# y_label_ = onehot[y_]
+# y_label_ = Variable(y_label_.cuda())
+# fill = torch.zeros([10, 10, args.img_size, args.img_size])
+# for i in range(10):
+#     fill[i, i, :, :] = 1
+# y_fill_ = fill[y_]
+# y_fill_ = Variable(y_fill_.cuda())
+# summary(fedgen, z, y_label_) # torchsummaryX
+# summary(add, x, y_fill_)
 
 ######### CVAE #########
 # from generators32.CCVAE import *
@@ -82,15 +82,15 @@ summary(add, x, y_fill_)
 from DDPM.ddpm32 import *
 fedgen = DDPM(args, nn_model=ContextUnet(in_channels=args.output_channel, n_feat=args.n_feat, n_classes=args.num_classes),
                 betas=(1e-4, 0.02), drop_prob=0.1).to(args.device) # [transforms.ToTensor(),]
-fedgen.load_state_dict(torch.load('checkpoint/FedDDPM320.pt')) # evaluate over args.guide_w = 0, 2
+# fedgen.load_state_dict(torch.load('checkpoint/FedDDPM320.pt')) # evaluate over args.guide_w = 0, 2
 # fedgen.load_state_dict(torch.load('checkpoint/FedDDPM321.pt')) # evaluate over args.guide_w = 0, 2
 # fedgen.load_state_dict(torch.load('checkpoint/FedDDPM322.pt')) # evaluate over args.guide_w = 0, 2
 summary(fedgen, x, c) # torchsummaryX
 
 ######## image generation #########
-fedgen.eval()
-with torch.no_grad():
-    img_batch, _ = fedgen.sample_image(args, sample_num=20) # outputs imgs of size (sample_num, 1*32*32)
-img_batch = img_batch.view(-1, args.output_channel, args.img_size, args.img_size) # (sample_num, 1, 32, 32)
+# fedgen.eval()
+# with torch.no_grad():
+#     img_batch, _ = fedgen.sample_image(args, sample_num=20) # outputs imgs of size (sample_num, 1*32*32)
+# img_batch = img_batch.view(-1, args.output_channel, args.img_size, args.img_size) # (sample_num, 1, 32, 32)
 
-save_image(img_batch, 'imgs/imgFedGEN/SynOrig_Ex3' + '.png', nrow=10)
+# save_image(img_batch, 'imgs/imgFedGEN/SynOrig_Ex3' + '.png', nrow=10)

@@ -177,13 +177,13 @@ def getDataset(args):
     elif args.dataset == 'mnist' and 'cnn' in args.models:
         transform_train = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Resize(args.img_size),
+            transforms.Resize(args.orig_img_size),
             # transforms.Normalize((0.1307,), (0.3081,)), # DCGAN 0.5
         ])
 
         transform_test = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Resize(args.img_size),
+            transforms.Resize(args.orig_img_size),
             # transforms.Normalize((0.1307,), (0.3081,)), # DCGAN 0.5
         ])
         
