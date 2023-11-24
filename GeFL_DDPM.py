@@ -230,7 +230,7 @@ def main():
                 sample_num = 40
                 samples = gen_glob.sample_image_4visualization(sample_num, guide_w=args.guide_w)                    
                 save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
-                            'imgs/imgFedDDPM/' + str(args.name) + str(args.rs) + 'Orig32_' + str(args.gen_wu_epochs +iter) + '.png', nrow=10, normalize=True)
+                            'imgs/imgFedDDPM/' + str(args.name) + str(args.rs) + 'Orig32_' + str(args.gen_wu_epochs +iter) + '.png', nrow=10) # , normalize=True
                 gen_glob.train()
             print('GEN Round {:3d}, G Avg loss {:.3f}'.format(args.gen_wu_epochs + iter, gloss_avg))
 

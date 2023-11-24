@@ -31,7 +31,7 @@ from utils.average import *
 from utils.getData import *
 from utils.getModels import *
 
-from DDPM.ddpm16_2 import *
+from DDPM.ddpm16 import *
 '''
 DDPM.ddpm14 features  / DDPM.ddpm16 features
 DDPM.ddpm28 orig/feat / DDPM.ddpm32 orig
@@ -88,7 +88,7 @@ parser.add_argument('--wandb', type=bool, default=True)
 parser.add_argument('--name', type=str, default='under_dev') # L-A: bad character
 ### DDPM parameters
 parser.add_argument('--n_feat', type=int, default=128) # 128 ok, 256 better (but slower)
-parser.add_argument('--n_T', type=int, default=400) # 400, 500
+parser.add_argument('--n_T', type=int, default=500) # 400, 500
 parser.add_argument('--guide_w', type=float, default=0.0) # 0, 0.5, 2
 
 args = parser.parse_args()
@@ -120,7 +120,7 @@ def main():
         os.makedirs(filename)
 
     if args.wandb:
-        run = wandb.init(dir=filename, project='GeFL-DDPMF16-1122', name= str(args.name)+ str(args.rs) +'w'+str(args.guide_w), reinit=True, settings=wandb.Settings(code_dir="."))
+        run = wandb.init(dir=filename, project='GeFL-DDPMF16-1124', name= str(args.name)+ str(args.rs) +'w'+str(args.guide_w), reinit=True, settings=wandb.Settings(code_dir="."))
         wandb.config.update(args)
     # logger = get_logger(logpath=os.path.join(filename, 'logs'), filepath=os.path.abspath(__file__))
     
@@ -227,7 +227,7 @@ def main():
             sample_num = 40
             samples = gen_glob.sample_image_4visualization(sample_num, guide_w=args.guide_w)
             save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
-                        'imgs/imgFedDDPMF/' + str(args.name)+ str(args.rs) + 'w_' + str(args.guide_w) + str(iter) + '.png', nrow=10, normalize=True)
+                        'imgs/imgFedDDPMF/' + str(args.name)+ str(args.rs) + 'w_' + str(args.guide_w) + str(iter) + '.png', nrow=10) # , normalize=True
             gen_glob.train()
         print('Warm-up Gen Round {:3d}, Average loss {:.3f}'.format(iter, gloss_avg))
 
@@ -293,7 +293,7 @@ def main():
                     sample_num = 40
                     samples = gen_glob.sample_image_4visualization(sample_num, guide_w=args.guide_w)
                     save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
-                        'imgs/imgFedDDPMF/' + str(args.name)+ str(args.rs) + 'w_' + str(args.guide_w) + str(iter) + '.png', nrow=10, normalize=True)
+                        'imgs/imgFedDDPMF/' + str(args.name)+ str(args.rs) + 'w_' + str(args.guide_w) + str(iter) + '.png', nrow=10) # , normalize=True
                     gen_glob.train()
         if args.aid_by_gen and not args.freeze_gen:
             gloss_avg = sum(gloss_locals) / len(gloss_locals)
@@ -342,7 +342,7 @@ def main():
                 })
 
     print(best_perf, 'AVG'+str(args.rs), sum(best_perf)/len(best_perf))
-    torch.save(gen_w_glob, 'checkpoint/FedDDPMF' + str(args.rs) + '.pt')
+    torch.save(gen_w_glob, 'checkpoint/FedDDPMF' + str(args.name) + str(args.rs) + '.pt')
 
     # sample_num = 10
     # gen_glob.eval()

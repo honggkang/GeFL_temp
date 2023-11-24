@@ -487,7 +487,7 @@ class LocalUpdate_DDPM(object): # DDPM
         self.args = args
         self.selected_clients = []
         self.feature_extractor = net_com
-        self.ldr_train = tqdm(DataLoader(DatasetSplit(dataset, idxs), batch_size=args.local_bs, shuffle=True, drop_last=True))
+        self.ldr_train = tqdm(DataLoader(DatasetSplit(dataset, idxs), batch_size=args.local_bs, shuffle=True)) # , drop_last=True
         self.lr = 1e-4
 
     def train(self, net, lr_decay_rate, opt=None):

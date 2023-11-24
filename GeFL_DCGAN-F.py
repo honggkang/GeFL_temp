@@ -383,7 +383,7 @@ def main():
                 })
                                     
     # print(best_perf, 'AVG'+str(args.rs), sum(best_perf)/len(best_perf))
-    torch.save(gen_w_glob, 'checkpoint/FedDCGANF' + str(args.rs) + '.pt')
+    # torch.save(gen_w_glob, 'checkpoint/FedDCGANF' + str(args.rs) + '.pt')
 
     if args.wandb:
         run.finish()
