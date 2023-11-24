@@ -31,7 +31,7 @@ from utils.average import *
 from utils.getData import *
 from utils.getModels import *
 
-from DDPM.ddpm16 import *
+from DDPM.ddpm16_2 import *
 '''
 DDPM.ddpm14 features  / DDPM.ddpm16 features
 DDPM.ddpm28 orig/feat / DDPM.ddpm32 orig
@@ -88,7 +88,7 @@ parser.add_argument('--wandb', type=bool, default=True)
 parser.add_argument('--name', type=str, default='under_dev') # L-A: bad character
 ### DDPM parameters
 parser.add_argument('--n_feat', type=int, default=128) # 128 ok, 256 better (but slower)
-parser.add_argument('--n_T', type=int, default=100) # 400, 500
+parser.add_argument('--n_T', type=int, default=400) # 400, 500
 parser.add_argument('--guide_w', type=float, default=0.0) # 0, 0.5, 2
 
 args = parser.parse_args()
@@ -342,6 +342,7 @@ def main():
                 })
 
     print(best_perf, 'AVG'+str(args.rs), sum(best_perf)/len(best_perf))
+    torch.save(gen_w_glob, 'checkpoint/FedDDPMF' + str(args.rs) + '.pt')
 
     # sample_num = 10
     # gen_glob.eval()

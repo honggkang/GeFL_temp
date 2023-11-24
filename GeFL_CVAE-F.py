@@ -122,7 +122,7 @@ def main():
         os.makedirs(filename)
 
     if args.wandb:
-        run = wandb.init(dir=filename, project='GeFL-CVAEF16-1122', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
+        run = wandb.init(dir=filename, project='GeFL-CVAEF16-1124', name= str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
         wandb.config.update(args)
     # logger = get_logger(logpath=os.path.join(filename, 'logs'), filepath=os.path.abspath(__file__))
     
@@ -228,7 +228,6 @@ def main():
             gen_glob.train()
         print('Warm-up Gen Round {:3d}, CVAE Average loss {:.3f}'.format(iter, loss_avg))
 
-    # torch.save(gen_w_glob, 'checkpoint/FedCVAEF.pt')
     best_perf = [0 for _ in range(args.num_models)]
 
     for iter in range(1,args.epochs+1):
@@ -351,7 +350,8 @@ def main():
     #     samples = gen_glob.sample_image_4visualization(sample_num)
     #     save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
     #                 'imgFedCVAE/' + 'sample_' + str(args.dataset) + '.png', nrow=10)
-    
+    torch.save(gen_w_glob, 'checkpoint/FedCVAEF' + str(args.rs) + '.pt')
+
     if args.wandb:
         run.finish()
 

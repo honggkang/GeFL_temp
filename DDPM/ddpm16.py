@@ -302,6 +302,7 @@ class DDPM(nn.Module):
         # where w>0 means more guidance
         size = args.img_shape
         guide_w = args.guide_w
+        
         x_i = torch.randn(sample_num, *size).to(args.device)  # x_T ~ N(0, 1), sample initial noise
         c_i = torch.randint(10, (sample_num, )).to(self.device) # MAX_NUM, (SIZE, )
         out_c = copy.deepcopy(c_i)
