@@ -85,7 +85,7 @@ parser.add_argument('--avg_FE', type=bool, default=True)
 ### logging
 parser.add_argument('--sample_test', type=int, default=10) # local epochs for training generator
 parser.add_argument('--save_imgs', type=bool, default=True) # local epochs for training generator
-parser.add_argument('--wandb', type=bool, default=False)
+parser.add_argument('--wandb', type=bool, default=True)
 parser.add_argument('--name', type=str, default='dev') # L-A: bad character
 ### GAN parameters
 parser.add_argument("--b1", type=float, default=0.5, help="adam: decay of first order momentum of gradient")

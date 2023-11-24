@@ -13,7 +13,7 @@ from torch.autograd import Variable
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, default='mnist') # stl10, cifar10, svhn, mnist, fmnist
 parser.add_argument('--num_classes', type=int, default=10)
-parser.add_argument("--output_channel", type=int, default=1, help="number of image channels")
+parser.add_argument("--output_channel", type=int, default=3, help="number of image channels")
 parser.add_argument("--img_size", type=int, default=16, help="size of each image dimension")
 ### DCGAN
 parser.add_argument('--latent_dim', type=int, default=100)
