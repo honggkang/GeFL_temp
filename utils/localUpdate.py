@@ -313,7 +313,13 @@ class LocalUpdate_header(object):
         self.loss_func = nn.CrossEntropyLoss()
         self.selected_clients = []
         self.ldr_train = DataLoader(DatasetSplit(dataset, idxs), batch_size=args.local_bs, shuffle=True)
-        self.iter = len(idxs)//args.local_bs
+        if len(idxs)//args.local_bs == 0:
+            self.iter = 1
+            self.less_samples = True
+            self.mini_bs = len(idxs)
+        else:
+            self.iter = len(idxs)//args.local_bs
+            self.less_samples = False        
         
     def train(self, net, learning_rate, gennet=None, feature_extractor=None):
         net.train()
@@ -331,7 +337,10 @@ class LocalUpdate_header(object):
         
                 for i in range(self.iter):
                     with torch.no_grad():
-                        images, labels = gennet.sample_image(self.args, sample_num=self.args.local_bs) # images.shape (bs, feature^2)
+                        if self.less_samples:
+                            images, labels = gennet.sample_image(self.args, sample_num=self.mini_bs) # images.shape (bs, feature^2)                        
+                        else:
+                            images, labels = gennet.sample_image(self.args, sample_num=self.args.local_bs) # images.shape (bs, feature^2)
                     net.zero_grad()
                     logits, log_probs = net(images, start_layer='feature')
                     loss = F.cross_entropy(logits, labels) # net.fc1.weight.grad / net.fc5.weight.grad

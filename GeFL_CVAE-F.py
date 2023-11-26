@@ -350,7 +350,7 @@ def main():
     #     samples = gen_glob.sample_image_4visualization(sample_num)
     #     save_image(samples.view(sample_num, args.output_channel, args.img_size, args.img_size),
     #                 'imgFedCVAE/' + 'sample_' + str(args.dataset) + '.png', nrow=10)
-    torch.save(gen_w_glob, 'checkpoint/FedCVAEF' + str(args.rs) + '.pt')
+    # torch.save(gen_w_glob, 'checkpoint/FedCVAEF' + str(args.rs) + '.pt')
 
     if args.wandb:
         run.finish()
