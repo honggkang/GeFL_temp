@@ -43,11 +43,12 @@ parser.add_argument('--num_users', type=int, default=10)
 parser.add_argument('--frac', type=float, default=1)
 parser.add_argument('--partial_data', type=float, default=0.1)
 ### model & feature size
-parser.add_argument('--models', type=str, default='cnn') # cnn, mlp 
+parser.add_argument('--models', type=str, default='cnnbn') # cnn, mlp 
 parser.add_argument('--output_channel', type=int, default=1) # local epochs for training generator
 parser.add_argument('--img_size', type=int, default=32) # local epochs for training generator
+parser.add_argument('--orig_img_size', type=int, default=32) # local epochs for training generator
 ### dataset
-parser.add_argument('--dataset', type=str, default='mnist') # stl10, cifar10, svhn, mnist, emnist
+parser.add_argument('--dataset', type=str, default='fmnist') # stl10, cifar10, svhn, mnist, emnist
 parser.add_argument('--noniid', action='store_true') # default: false
 parser.add_argument('--dir_param', type=float, default=0.3)
 parser.add_argument('--num_classes', type=int, default=10)
@@ -64,7 +65,7 @@ parser.add_argument('--device_id', type=str, default='2')
 ### warming-up
 parser.add_argument('--gen_wu_epochs', type=int, default=100) # warm-up epochs
 
-parser.add_argument('--epochs', type=int, default=0)
+parser.add_argument('--epochs', type=int, default=50)
 parser.add_argument('--local_ep', type=int, default=5)
 parser.add_argument('--local_ep_gen', type=int, default=1)
 parser.add_argument('--gen_local_ep', type=int, default=5)
@@ -76,7 +77,7 @@ parser.add_argument('--avg_FE', type=bool, default=True) # LG-FedAvg
 ### logging
 parser.add_argument('--sample_test', type=int, default=10) # local epochs for training generator
 parser.add_argument('--save_imgs', type=bool, default=True) # local epochs for training generator
-parser.add_argument('--wandb', type=bool, default=False)
+parser.add_argument('--wandb', type=bool, default=True)
 parser.add_argument('--name', type=str, default='_') # L-A: bad character
 ### DDPM parameters
 parser.add_argument('--n_feat', type=int, default=128) # 128 ok, 256 better (but slower)
@@ -90,11 +91,11 @@ args = parser.parse_args()
 args.device = 'cuda:' + args.device_id
 args.img_shape = (args.output_channel, args.img_size, args.img_size)
 
-if args.img_size==32:
-    tf = transforms.Compose([transforms.ToTensor(),transforms.Resize(32),]) # mnist is already normalised 0 to 1
-else:
-    tf = transforms.Compose([transforms.ToTensor(),]) # mnist is already normalised 0 to 1
-train_data = datasets.MNIST(root='/home/hong/NeFL/.data/mnist', train=True, transform=tf, download=True) # VAE training data
+tf = transforms.Compose([transforms.Resize(args.img_size), transforms.ToTensor(),]) # mnist is already normalised 0 to 1
+if args.dataset == 'mnist':
+    train_data = datasets.MNIST(root='/home/hong/NeFL/.data/mnist', train=True, transform=tf, download=True) # VAE training data
+elif args.dataset == 'fmnist':
+    train_data = datasets.FashionMNIST('/home/hong/NeFL/.data/fmnist', train=True, transform=tf, download=True)
 
 def main():
     print(args)
@@ -123,7 +124,7 @@ def main():
         os.makedirs(filename)
 
     if args.wandb:
-        run = wandb.init(dir=filename, project='GeFL-DDPM32-1120', name= str(args.name)+ 'w' +str(args.guide_w) + '_' + str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
+        run = wandb.init(dir=filename, project='GeFL-DDPM32-1128', name= str(args.name)+ 'w' +str(args.guide_w) + '_' + str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
         wandb.config.update(args)
     # logger = get_logger(logpath=os.path.join(filename, 'logs'), filepath=os.path.abspath(__file__))
     

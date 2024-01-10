@@ -24,6 +24,7 @@ RAWimgFedCDDPM/
 RAWimgFedCGAN/
 RAWimgFedCVAE/
 figs/
+checkpoint/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

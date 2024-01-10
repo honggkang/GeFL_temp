@@ -204,16 +204,16 @@ def getDataset(args):
         dataset_train = datasets.FashionMNIST('/home/hong/NeFL/.data/fmnist', train=True, download=True, transform=transform_train)
         dataset_test = datasets.FashionMNIST('/home/hong/NeFL/.data/fmnist', train=False, download=True, transform=transform_test)
 
-    elif args.dataset == 'fmnist' and args.models == 'cnn':
+    elif args.dataset == 'fmnist' and 'cnn' in args.models:
         transform_train = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Resize(32),
+            transforms.Resize(args.orig_img_size),
             transforms.Normalize((0.5,), (0.5,)),
         ])
 
         transform_test = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Resize(32),
+            transforms.Resize(args.orig_img_size),
             transforms.Normalize((0.5,), (0.5,)),
         ])
         

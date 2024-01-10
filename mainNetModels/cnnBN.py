@@ -5,7 +5,7 @@ import torch
 class CNN2(torch.nn.Module):
     def __init__(self):
         super(CNN2, self).__init__()
-        self.conv0 = torch.nn.Conv2d(1, 3, kernel_size=3, padding=1)
+        self.conv0 = torch.nn.Conv2d(3, 3, kernel_size=3, padding=1)
         self.bn0 = torch.nn.BatchNorm2d(3)
         self.conv1 = torch.nn.Conv2d(3, 16, kernel_size=3, padding=1) # self.conv1.weight.size(): torch.Size([16, 1, 3, 3])
         self.bn1 = torch.nn.BatchNorm2d(16)
@@ -33,7 +33,7 @@ class CNN2(torch.nn.Module):
 class CNN3(torch.nn.Module):
     def __init__(self):
         super(CNN3, self).__init__()
-        self.conv0 = torch.nn.Conv2d(1, 3, kernel_size=3, padding=1)
+        self.conv0 = torch.nn.Conv2d(3, 3, kernel_size=3, padding=1)
         self.bn0 = torch.nn.BatchNorm2d(3)
         self.conv1 = torch.nn.Conv2d(3, 16, kernel_size=3, padding=1) # self.conv1.weight.size(): torch.Size([16, 1, 3, 3])
         self.bn1 = torch.nn.BatchNorm2d(16)
@@ -67,7 +67,7 @@ class CNN3(torch.nn.Module):
 class CNN3b(torch.nn.Module):
     def __init__(self):
         super(CNN3b, self).__init__()
-        self.conv0 = torch.nn.Conv2d(1, 3, kernel_size=3, padding=1)
+        self.conv0 = torch.nn.Conv2d(3, 3, kernel_size=3, padding=1)
         self.bn0 = torch.nn.BatchNorm2d(3)
         self.conv1 = torch.nn.Conv2d(3, 20, kernel_size=3, padding=1) # self.conv1.weight.size(): torch.Size([16, 1, 3, 3])
         self.bn1 = torch.nn.BatchNorm2d(20)
@@ -101,7 +101,7 @@ class CNN3b(torch.nn.Module):
 class CNN3c(torch.nn.Module):
     def __init__(self):
         super(CNN3c, self).__init__()
-        self.conv0 = torch.nn.Conv2d(1, 3, kernel_size=3, padding=1)
+        self.conv0 = torch.nn.Conv2d(3, 3, kernel_size=3, padding=1)
         self.bn0 = torch.nn.BatchNorm2d(3)
         self.conv1 = torch.nn.Conv2d(3, 10, kernel_size=3, padding=1) # self.conv1.weight.size(): torch.Size([16, 1, 3, 3])
         self.bn1 = torch.nn.BatchNorm2d(10)
@@ -135,7 +135,7 @@ class CNN3c(torch.nn.Module):
 class CNN4(torch.nn.Module):
     def __init__(self):
         super(CNN4, self).__init__()
-        self.conv0 = torch.nn.Conv2d(1, 3, kernel_size=3, padding=1)
+        self.conv0 = torch.nn.Conv2d(3, 3, kernel_size=3, padding=1)
         self.bn0 = torch.nn.BatchNorm2d(3)
         self.conv1 = torch.nn.Conv2d(3, 16, kernel_size=3, padding=1) # self.conv1.weight.size(): torch.Size([16, 1, 3, 3])
         self.bn1 = torch.nn.BatchNorm2d(16)
@@ -175,7 +175,7 @@ class CNN4(torch.nn.Module):
 class CNN4b(torch.nn.Module):
     def __init__(self):
         super(CNN4b, self).__init__()
-        self.conv0 = torch.nn.Conv2d(1, 3, kernel_size=3, padding=1)
+        self.conv0 = torch.nn.Conv2d(3, 3, kernel_size=3, padding=1)
         self.bn0 = torch.nn.BatchNorm2d(3)
         self.conv1 = torch.nn.Conv2d(3, 20, kernel_size=3, padding=1) # self.conv1.weight.size(): torch.Size([16, 1, 3, 3])
         self.bn1 = torch.nn.BatchNorm2d(20)
@@ -215,7 +215,7 @@ class CNN4b(torch.nn.Module):
 class CNN4c(torch.nn.Module):
     def __init__(self):
         super(CNN4c, self).__init__()
-        self.conv0 = torch.nn.Conv2d(1, 3, kernel_size=3, padding=1)
+        self.conv0 = torch.nn.Conv2d(3, 3, kernel_size=3, padding=1)
         self.bn0 = torch.nn.BatchNorm2d(3)
         self.conv1 = torch.nn.Conv2d(3, 10, kernel_size=3, padding=1) # self.conv1.weight.size(): torch.Size([16, 1, 3, 3])
         self.bn1 = torch.nn.BatchNorm2d(10)
@@ -255,7 +255,7 @@ class CNN4c(torch.nn.Module):
 class CNN5(torch.nn.Module):
     def __init__(self):
         super(CNN5, self).__init__()
-        self.conv0 = torch.nn.Conv2d(1, 3, kernel_size=3, padding=1)
+        self.conv0 = torch.nn.Conv2d(3, 3, kernel_size=3, padding=1)
         self.bn0 = torch.nn.BatchNorm2d(3)
         self.conv1 = torch.nn.Conv2d(3, 16, kernel_size=3, padding=1) # self.conv1.weight.size(): torch.Size([16, 1, 3, 3])
         self.bn1 = torch.nn.BatchNorm2d(16)
@@ -301,7 +301,7 @@ class CNN5(torch.nn.Module):
 class CNN5b(torch.nn.Module):
     def __init__(self):
         super(CNN5b, self).__init__()
-        self.conv0 = torch.nn.Conv2d(1, 3, kernel_size=3, padding=1)
+        self.conv0 = torch.nn.Conv2d(3, 3, kernel_size=3, padding=1)
         self.bn0 = torch.nn.BatchNorm2d(3)
         self.conv1 = torch.nn.Conv2d(3, 20, kernel_size=3, padding=1) # self.conv1.weight.size(): torch.Size([16, 1, 3, 3])
         self.bn1 = torch.nn.BatchNorm2d(20)
@@ -347,7 +347,7 @@ class CNN5b(torch.nn.Module):
 class CNN5c(torch.nn.Module):
     def __init__(self):
         super(CNN5c, self).__init__()
-        self.conv0 = torch.nn.Conv2d(1, 3, kernel_size=3, padding=1)
+        self.conv0 = torch.nn.Conv2d(3, 3, kernel_size=3, padding=1)
         self.bn0 = torch.nn.BatchNorm2d(3)
         self.conv1 = torch.nn.Conv2d(3, 32, kernel_size=3, padding=1) # self.conv1.weight.size(): torch.Size([16, 1, 3, 3])
         self.bn1 = torch.nn.BatchNorm2d(32)
@@ -393,7 +393,7 @@ class CNN5c(torch.nn.Module):
 class FE_CNN(torch.nn.Module):
     def __init__(self):
         super(FE_CNN, self).__init__()
-        self.conv0 = torch.nn.Conv2d(1, 3, kernel_size=3, padding=1)
+        self.conv0 = torch.nn.Conv2d(3, 3, kernel_size=3, padding=1)
         self.bn0 = torch.nn.BatchNorm2d(3)
         self.pool = torch.nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
     

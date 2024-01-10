@@ -300,7 +300,7 @@ def train_mnist():
     n_feat = 128 # 128 ok, 256 better (but slower)
     lrate = 1e-4
     save_model = False
-    save_dir = '/diffusion_outputs10/'
+    save_dir = './diffusion_outputs10/'
     ws_test = [0.0, 0.5, 2.0] # strength of generative guidance
 
     # device = "cpu"
@@ -382,7 +382,7 @@ def train_mnist():
                                 axs[row, col].set_xticks([])
                                 axs[row, col].set_yticks([])
                                 # plots.append(axs[row, col].imshow(x_gen_store[i,(row*n_classes)+col,0],cmap='gray'))
-                                plots.append(axs[row, col].imshow(-x_gen_store[i,(row*n_classes)+col,0],cmap='gray',vmin=(-x_gen_store[i]).min(), vmax=(-x_gen_store[i]).max()))
+                                plots.append(axs[row, col].imshow(x_gen_store[i,(row*n_classes)+col,0],cmap='gray',vmin=(x_gen_store[i]).min(), vmax=(x_gen_store[i]).max()))
                         return plots
                     ani = FuncAnimation(fig, animate_diff, fargs=[x_gen_store],  interval=200, blit=False, repeat=True, frames=x_gen_store.shape[0])
                     ani.save(save_dir + f"gif_ep{ep}_w{w}.gif", dpi=100, writer=PillowWriter(fps=5))

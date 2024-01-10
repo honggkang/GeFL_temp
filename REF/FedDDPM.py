@@ -19,10 +19,10 @@ from DDPM.ddpm28 import *
 from utils.getData import *
 from utils.average import *
 
-os.makedirs("RAWimgFedCDDPM", exist_ok=True)
+os.makedirs("imgDDPM", exist_ok=True)
 
 def train_mnist(args):
-    save_dir = './RAWimgFedCDDPM/'
+    save_dir = './imgDDPM/'
     # hardcoding these here
     n_epoch = args.n_epochs # 20
     batch_size = args.batch_size # 256
@@ -32,21 +32,25 @@ def train_mnist(args):
     n_feat = 128 # 128 ok, 256 better (but slower)
     lrate = 1e-4
 
-    save_model = True
+    save_model = False
     ws_test = [0.0, 0.5, 2.0] # strength of generative guidance
 
     # device = "cpu"
     device = args.device
 
-    gddpm = DDPM(nn_model=ContextUnet(in_channels=1, n_feat=n_feat, n_classes=n_classes), betas=(1e-4, 0.02), n_T=n_T, device=device, drop_prob=0.1)
+    gddpm = DDPM(args, nn_model=ContextUnet(in_channels=1, n_feat=n_feat, n_classes=n_classes),
+                    betas=(1e-4, 0.02), drop_prob=0.1)
+    # .to(device)
+    # gddpm = DDPM(nn_model=ContextUnet(in_channels=1, n_feat=n_feat, n_classes=n_classes), betas=(1e-4, 0.02), n_T=n_T, device=device, drop_prob=0.1)
     gddpm.to(device)
     x = torch.zeros(1,1,28,28, device='cuda') # 
     c = torch.cuda.LongTensor((1,))
-    summary(gddpm, x, c) # torchsummaryX
+    # summary(gddpm, x, c) # torchsummaryX
     
     ddpms = []
     for i in range(args.num_users):
-        ddpms.append(DDPM(nn_model=ContextUnet(in_channels=1, n_feat=n_feat, n_classes=n_classes), betas=(1e-4, 0.02), n_T=n_T, device=device, drop_prob=0.1).to(device))
+        ddpms.append(DDPM(args, nn_model=ContextUnet(in_channels=1, n_feat=n_feat, n_classes=n_classes),
+                    betas=(1e-4, 0.02), drop_prob=0.1).to(device))
     
     # x = torch.zeros(1,1,14,14) # , device='cuda'
     # c = torch.LongTensor((1,))
@@ -126,23 +130,23 @@ def train_mnist(args):
                     save_image(grid, save_dir + f"{args.num_users}_nT{n_T}_ep{ep}_w{w}.png")
                     print('saved image at ' + save_dir + f"{args.num_users}_nT{n_T}_ep{ep}_w{w}.png")
 
-                    # if ep%20==0 or ep == int(n_epoch-1):
-                    #     # create gif of images evolving over time, based on x_gen_store
-                    #     fig, axs = plt.subplots(nrows=int(n_sample/n_classes), ncols=n_classes,sharex=True,sharey=True,figsize=(8,3))
-                    #     def animate_diff(i, x_gen_store):
-                    #         print(f'gif animating frame {i} of {x_gen_store.shape[0]}', end='\r')
-                    #         plots = []
-                    #         for row in range(int(n_sample/n_classes)):
-                    #             for col in range(n_classes):
-                    #                 axs[row, col].clear()
-                    #                 axs[row, col].set_xticks([])
-                    #                 axs[row, col].set_yticks([])
-                    #                 # plots.append(axs[row, col].imshow(x_gen_store[i,(row*n_classes)+col,0],cmap='gray'))
-                    #                 plots.append(axs[row, col].imshow(-x_gen_store[i,(row*n_classes)+col,0],cmap='gray',vmin=(-x_gen_store[i]).min(), vmax=(-x_gen_store[i]).max()))
-                    #         return plots
-                    #     ani = FuncAnimation(fig, animate_diff, fargs=[x_gen_store],  interval=200, blit=False, repeat=True, frames=x_gen_store.shape[0])
-                    #     ani.save(save_dir + f"gif_ep{ep}_w{w}.gif", dpi=100, writer=PillowWriter(fps=5))
-                    #     print('saved image at ' + save_dir + f"gif_ep{ep}_w{w}.gif")
+                    if ep%20==0 or ep == int(n_epoch-1):
+                        # create gif of images evolving over time, based on x_gen_store
+                        fig, axs = plt.subplots(nrows=int(n_sample/n_classes), ncols=n_classes,sharex=True,sharey=True,figsize=(8,3))
+                        def animate_diff(i, x_gen_store):
+                            print(f'gif animating frame {i} of {x_gen_store.shape[0]}', end='\r')
+                            plots = []
+                            for row in range(int(n_sample/n_classes)):
+                                for col in range(n_classes):
+                                    axs[row, col].clear()
+                                    axs[row, col].set_xticks([])
+                                    axs[row, col].set_yticks([])
+                                    # plots.append(axs[row, col].imshow(x_gen_store[i,(row*n_classes)+col,0],cmap='gray'))
+                                    plots.append(axs[row, col].imshow(x_gen_store[i,(row*n_classes)+col,0],cmap='gray',vmin=(x_gen_store[i]).min(), vmax=(-x_gen_store[i]).max()))
+                            return plots
+                        ani = FuncAnimation(fig, animate_diff, fargs=[x_gen_store],  interval=200, blit=False, repeat=True, frames=x_gen_store.shape[0])
+                        ani.save(save_dir + f"gif_ep{ep}_w{w}.gif", dpi=100, writer=PillowWriter(fps=5))
+                        print('saved image at ' + save_dir + f"gif_ep{ep}_w{w}.gif")
         # optionally save model
         if save_model and ep == int(n_epoch):
             save_dir = './models/save/'
@@ -151,18 +155,18 @@ def train_mnist(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--n_epochs", type=int, default=400, help="number of epochs of training")
+    parser.add_argument("--n_epochs", type=int, default=20, help="number of epochs of training")
     parser.add_argument("--batch_size", type=int, default=64, help="size of the batches")
     parser.add_argument("--latent_size", type=int, default=20, help="dimensionality of the latent space")
     parser.add_argument("--n_classes", type=int, default=10, help="number of classes for dataset")
     parser.add_argument("--img_size", type=int, default=28, help="size of each image dimension")
     parser.add_argument("--channels", type=int, default=1, help="number of image channels")
-    parser.add_argument("--sample_interval", type=int, default=40, help="interval between image sampling")
+    parser.add_argument("--sample_interval", type=int, default=10, help="interval between image sampling")
     parser.add_argument('--device_id', type=str, default='0')
-    parser.add_argument("--n_T", type=int, default=60)
+    parser.add_argument("--n_T", type=int, default=400)
 
-    parser.add_argument("--num_users", type=int, default=10, help="interval between image sampling")
-    parser.add_argument('--partial_data', type=float, default=0.1)
+    parser.add_argument("--num_users", type=int, default=1, help="interval between image sampling")
+    parser.add_argument('--partial_data', type=float, default=1)
     opt = parser.parse_args()
     opt.device = 'cuda:' + opt.device_id
 
