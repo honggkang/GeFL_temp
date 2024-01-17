@@ -67,7 +67,7 @@ class CCVAE(nn.Module):
         t = F.relu(self.bn3(self.conv3(t))) # 2*2
         t = F.relu(self.bn4(self.conv4(t))) # 1*1
         t = t.reshape((x.shape[0], -1))
-        
+
         mu = self.mu(t)
         logvar = self.logvar(t)
         return mu, logvar

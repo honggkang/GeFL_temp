@@ -39,6 +39,7 @@ from utils.util import test_img, get_logger
 # from models import *
 # from utils.NeFedAvg import NeFedAvg
 # from AutoAugment.autoaugment import ImageNetPolicy
+from torchsummary import summary
 
 parser = argparse.ArgumentParser()
 ### clients
@@ -63,7 +64,7 @@ parser.add_argument('--weight_decay', type=float, default=0)
 ### reproducibility
 parser.add_argument('--rs', type=int, default=0)
 parser.add_argument('--num_experiment', type=int, default=3, help="the number of experiments")
-parser.add_argument('--device_id', type=str, default='1')
+parser.add_argument('--device_id', type=str, default='0')
 ### warming-up
 parser.add_argument('--wu_epochs', type=int, default=20) # warm-up epochs for main networks
 parser.add_argument('--gen_wu_epochs', type=int, default=100) # warm-up epochs for generator
@@ -82,7 +83,7 @@ parser.add_argument('--avg_FE', type=bool, default=True)
 ### logging
 parser.add_argument('--sample_test', type=int, default=10) # local epochs for training generator
 parser.add_argument('--save_imgs', type=bool, default=True) # local epochs for training generator
-parser.add_argument('--wandb', type=bool, default=True)
+parser.add_argument('--wandb', type=bool, default=False)
 parser.add_argument('--name', type=str, default='under_dev') # L-A: bad character
 ### VAE parameters
 parser.add_argument('--latent_size', type=int, default=16) # local epochs for training generator
@@ -183,11 +184,11 @@ def main():
                         "Mean test accuracy": sum(acc_test_tot) / len(acc_test_tot)
                     })
         torch.save(w_comm, 'models/save/FedCVAE' + '_'
-                + str(args.models) + '16_common_net' + str(args.rs) + '.pt')
+                + str(args.num_users) + str(args.feature_size) + str(args.models) + '16_common_net' + str(args.rs) + '.pt')
     else:
         w_comm = torch.load('models/save/Fed_cnn_common_net.pt') # common_net = FE_MLP.to(args.device)
 
-    common_net.load_state_dict(w_comm)    
+    common_net.load_state_dict(w_comm)
 
     if args.freeze_FE:
         common_net.eval()

@@ -331,7 +331,7 @@ class CNN5c(torch.nn.Module):
         self.conv4 = torch.nn.Conv2d(40, 80, kernel_size=3, padding=1)
         self.pool = torch.nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
         self.fc = torch.nn.Linear(1*1*80, 10, bias=True)
-    
+
     def forward(self, x, start_layer=None):
         if start_layer == None:
             x = torch.nn.functional.relu(self.bn(self.conv0(x)))

@@ -5,9 +5,8 @@ import torchvision
 from collections import defaultdict
 from functools import reduce
 # import ipdb
-import time
+import time, os
 import matplotlib.pyplot as plt
-import os 
 
 def calc_cg_score(
     _dataset, device, *args, 

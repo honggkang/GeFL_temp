@@ -29,6 +29,22 @@ def getModel(args):
         
         common_net = FE_CNN().to(args.device)
 
+    elif args.models == 'cnn_feats':
+        from mainNetModels.cnn_feat_exp import CNN5_5, FE_CNN_5
+        import copy
+        net = CNN5_5().to(args.device)
+        net_temp1 = copy.deepcopy(net)
+        net_temp2 = copy.deepcopy(net)
+        net_temp2b = copy.deepcopy(net)
+        net_temp3 = copy.deepcopy(net)
+        net_temp3b = copy.deepcopy(net)
+        net_temp3c = copy.deepcopy(net)
+        net_temp4 = copy.deepcopy(net)
+        net_temp4b = copy.deepcopy(net)
+        net_temp4c = copy.deepcopy(net)
+        net_temp5 = copy.deepcopy(net)
+        
+        common_net = FE_CNN_5().to(args.device)        
 
     elif args.models == 'cnnbn' and (args.dataset == 'mnist' or args.dataset == 'fmnist'):
         from mainNetModels.cnnbn import CNN2, CNN3, CNN3b, CNN3c, CNN4, CNN4b, CNN4c, CNN5, CNN5b, CNN5c, FE_CNN
@@ -92,7 +108,7 @@ def getModel(args):
         net_temp5 = CNN5c().to(args.device)
         
         common_net = FE_CNN().to(args.device)
-                
+
     elif args.models == 'mlp':
         from mainNetModels.mlp import MLP2, MLP3, MLP3b, MLP4, MLP4b, MLP4c, MLP5, MLP5b, MLP5c, MLP6, FE_MLP
         net_temp1 = MLP2().to(args.device)
