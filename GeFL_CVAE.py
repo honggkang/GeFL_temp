@@ -74,7 +74,7 @@ parser.add_argument('--local_ep', type=int, default=5)
 parser.add_argument('--local_ep_gen', type=int, default=1) # local epochs for training main nets by generated samples
 parser.add_argument('--gen_local_ep', type=int, default=5) # local epochs for training generator
 
-parser.add_argument('--aid_by_gen', type=bool, default=True)
+parser.add_argument('--aid_by_gen', type=bool, default=False)
 parser.add_argument('--freeze_gen', type=bool, default=True)
 parser.add_argument('--only_gen', type=bool, default=False)
 parser.add_argument('--avg_FE', type=bool, default=True)
@@ -87,6 +87,9 @@ parser.add_argument('--name', type=str, default='dev') # L-A: bad character
 parser.add_argument('--latent_size', type=int, default=16) # local epochs for training generator
 ### Target nets
 parser.add_argument('--lr', type=float, default=1e-1)
+### FedProx parameters
+parser.add_argument('--fedprox', type=bool, default=True) # local epochs for training generator
+parser.add_argument('--mu', type=float, default=1e-2)
 
 args = parser.parse_args()
 args.device = 'cuda:' + args.device_id
@@ -187,7 +190,6 @@ def main():
 
         for idx in idxs_users:
             dev_spec_idx = min(idx//(args.num_users//args.num_models), args.num_models-1)
-            # model_idx = random.choice(mlist[max(0,dev_spec_idx-args.min_flex_num):min(len(args.ps),dev_spec_idx+1+args.max_flex_num)])
             model_idx = dev_spec_idx
             model = local_models[model_idx]
             model.load_state_dict(ws_glob[model_idx])
@@ -196,12 +198,16 @@ def main():
                 local = LocalUpdate_onlyGen(args, dataset=dataset_train, idxs=dict_users[idx])
                 weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), gennet=copy.deepcopy(gen_glob), learning_rate=lr)
             else:
-                local = LocalUpdate(args, dataset=dataset_train, idxs=dict_users[idx])
-                # synthetic data updates header & real data updates whole target network
-                if args.aid_by_gen:
-                    weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), gennet=copy.deepcopy(gen_glob), learning_rate=lr)
+                if args.fedprox:
+                    local = LocalUpdate(args, dataset=dataset_train, idxs=dict_users[idx])
+                    weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), learning_rate=lr)                    
                 else:
-                    weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), learning_rate=lr)
+                    local = LocalUpdate(args, dataset=dataset_train, idxs=dict_users[idx])
+                    # synthetic data updates header & real data updates whole target network
+                    if args.aid_by_gen:
+                        weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), gennet=copy.deepcopy(gen_glob), learning_rate=lr)
+                    else:
+                        weight, loss, gen_loss = local.train(net=copy.deepcopy(model).to(args.device), learning_rate=lr)
 
             ws_local[model_idx].append(weight)
             loss_locals.append(loss)

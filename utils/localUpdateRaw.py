@@ -88,6 +88,39 @@ class LocalUpdate(object):
         return net.state_dict(), sum(epoch_loss) / len(epoch_loss), gen_loss
 
 
+class LocalUpdate_fedprox(object):
+    def __init__(self, args, dataset=None, idxs=None):
+        self.args = args
+        self.loss_func = nn.CrossEntropyLoss()
+        self.selected_clients = []
+        self.ldr_train = DataLoader(DatasetSplit(dataset, idxs), batch_size=args.local_bs, shuffle=True)
+        
+    def train(self, net, learning_rate, gennet=None):
+        net.train()
+
+        # train and update
+        optimizer = torch.optim.SGD(net.parameters(), lr=learning_rate, momentum=self.args.momentum, weight_decay=self.args.weight_decay)
+        epoch_loss = []
+        gen_loss = None
+
+        for iter in range(self.args.local_ep): # train net performing main-task
+            batch_loss = []
+
+            for batch_idx, (images, labels) in enumerate(self.ldr_train):
+                images, labels = images.to(self.args.device), labels.to(self.args.device)
+                net.zero_grad()
+                logits, log_probs = net(images)
+                loss = F.cross_entropy(logits, labels)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+
+                batch_loss.append(loss.item())
+            epoch_loss.append(sum(batch_loss)/len(batch_loss))
+
+        return net.state_dict(), sum(epoch_loss) / len(epoch_loss), gen_loss
+
+
 class LocalUpdate_onlyGen(object):
     def __init__(self, args, dataset=None, idxs=None):
         self.args = args

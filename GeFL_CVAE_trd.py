@@ -42,7 +42,7 @@ from utils.util import test_img, get_logger
 
 parser = argparse.ArgumentParser()
 ### clients
-parser.add_argument('--num_users', type=int, default=50)
+parser.add_argument('--num_users', type=int, default=100)
 parser.add_argument('--frac', type=float, default=1)
 parser.add_argument('--partial_data', type=float, default=0.1)
 ### model & feature size
@@ -64,9 +64,9 @@ parser.add_argument('--weight_decay', type=float, default=0)
 ### reproducibility
 parser.add_argument('--rs', type=int, default=0)
 parser.add_argument('--num_experiment', type=int, default=3, help="the number of expe4riments")
-parser.add_argument('--device_id', type=str, default='1')
+parser.add_argument('--device_id', type=str, default='0')
 ### warming-up
-parser.add_argument('--wu_epochs', type=int, default=20) # warm-up epochs for main networks
+parser.add_argument('--wu_epochs', type=int, default=2) # warm-up epochs for main networks
 parser.add_argument('--gen_wu_epochs', type=int, default=100) # warm-up epochs for generator
 
 parser.add_argument('--epochs', type=int, default=50)
@@ -74,7 +74,7 @@ parser.add_argument('--local_ep', type=int, default=5)
 parser.add_argument('--local_ep_gen', type=int, default=1) # local epochs for training main nets by generated samples
 parser.add_argument('--gen_local_ep', type=int, default=5) # local epochs for training generator
 
-parser.add_argument('--aid_by_gen', type=bool, default=False)
+parser.add_argument('--aid_by_gen', type=bool, default=True)
 parser.add_argument('--freeze_gen', type=bool, default=True)
 parser.add_argument('--only_gen', type=bool, default=False)
 parser.add_argument('--avg_FE', type=bool, default=False)
@@ -121,7 +121,7 @@ def main():
     if not os.path.exists(filename):
         os.makedirs(filename)
     if args.wandb:
-        run = wandb.init(dir=filename, project='GeFL-VFeat-0116', name= str(args.num_users)+str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
+        run = wandb.init(dir=filename, project='GeFL_VFeat-0118', name= str(args.num_users)+str(args.name)+ str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
         wandb.config.update(args)
     # logger = get_logger(logpath=os.path.join(filename, 'logs'), filepath=os.path.abspath(__file__))
     
@@ -180,10 +180,10 @@ def main():
                 })
 
     gen_glob = CCVAE(args).to(args.device)
-    gen_w_glob = gen_glob.state_dict()
 
     opt = torch.optim.Adam(gen_glob.parameters(), lr=1e-3, weight_decay=0.001).state_dict()
     opts = [copy.deepcopy(opt) for _ in range(args.num_users)]
+    gen_w_glob = gen_glob.state_dict()
 
     for iter in range(1, args.gen_wu_epochs+1):
         ''' ---------------------------
@@ -200,7 +200,8 @@ def main():
 
             local = LocalUpdate_CVAE(args, dataset=dataset_train, idxs=dict_users[idx])
             gen_weight, loss, opts[idx] = local.train(net=copy.deepcopy(gen_glob), opt=opts[idx])
-            # gen_weight.to('cpu')
+            # for k in gen_weight.keys():
+            #     gen_weight[k].to('cpu') # 100 users
             gen_w_local.append(copy.deepcopy(gen_weight))
             loss_locals.append(loss)
         

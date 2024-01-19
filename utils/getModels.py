@@ -44,7 +44,7 @@ def getModel(args):
         net_temp4c = copy.deepcopy(net)
         net_temp5 = copy.deepcopy(net)
         
-        common_net = FE_CNN_5().to(args.device)        
+        common_net = FE_CNN_5().to(args.device)
 
     elif args.models == 'cnnbn' and (args.dataset == 'mnist' or args.dataset == 'fmnist'):
         from mainNetModels.cnnbn import CNN2, CNN3, CNN3b, CNN3c, CNN4, CNN4b, CNN4c, CNN5, CNN5b, CNN5c, FE_CNN

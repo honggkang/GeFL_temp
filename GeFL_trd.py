@@ -28,7 +28,7 @@ from generators.CCVAE import *
 
 parser = argparse.ArgumentParser()
 ### clients
-parser.add_argument('--num_users', type=int, default=50)
+parser.add_argument('--num_users', type=int, default=100)
 parser.add_argument('--frac', type=float, default=1)
 parser.add_argument('--partial_data', type=float, default=0.1)
 ### model & feature size
@@ -59,8 +59,8 @@ parser.add_argument('--local_ep', type=int, default=5)
 parser.add_argument('--local_ep_gen', type=int, default=1) # local epochs for training target nets by generated samples
 parser.add_argument('--gen_local_ep', type=int, default=5) # local epochs for training generator
 
-parser.add_argument('--aid_by_gen', type=bool, default=False)
-parser.add_argument('--freeze_FE', type=bool, default=False)
+parser.add_argument('--aid_by_gen', type=bool, default=True)
+parser.add_argument('--freeze_FE', type=bool, default=True)
 parser.add_argument('--freeze_gen', type=bool, default=True)
 parser.add_argument('--only_gen', type=bool, default=False)
 parser.add_argument('--load_trained_FE', type=bool, default=False)
@@ -68,14 +68,14 @@ parser.add_argument('--avg_FE', type=bool, default=True)
 ### logging
 parser.add_argument('--sample_test', type=int, default=10)
 parser.add_argument('--save_imgs', type=bool, default=False)
-parser.add_argument('--wandb', type=bool, default=True)
+parser.add_argument('--wandb', type=bool, default=False)
 parser.add_argument('--name', type=str, default='under_dev') # L-A: bad character
 ### VAE parameters
 parser.add_argument('--latent_size', type=int, default=16) # local epochs for training generator
 ### target nets
 parser.add_argument('--lr', type=float, default=1e-1)
 #### Feature size varying
-parser.add_argument('--feature_size', type=int, default=2) # N/A warm-up epochs for main networks
+parser.add_argument('--feature_size', type=int, default=1) # N/A warm-up epochs for main networks
 
 args = parser.parse_args()
 args.img_shape = (args.output_channel, args.img_size, args.img_size)
@@ -162,7 +162,7 @@ def main():
     if not os.path.exists(filename):
         os.makedirs(filename)
     if args.wandb:
-        run = wandb.init(dir=filename, project='LGFedAvg-VFeat-0116', name= str(args.num_users)+str(args.name)+ str(args.feature_size)+  str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
+        run = wandb.init(dir=filename, project='GeFL_VFE-0118', name= str(args.num_users)+str(args.name)+ str(args.feature_size)+  str(args.rs), reinit=True, settings=wandb.Settings(code_dir="."))
         wandb.config.update(args)
 
     loss_train = []
@@ -238,8 +238,8 @@ def main():
         
         m = max(int(args.frac * args.num_users), 1)
         idxs_users = np.random.choice(range(args.num_users), m, replace=False)
-        
         gen_glob.load_state_dict(gen_w_glob)
+        
         for idx in idxs_users:
                         
             local = LocalUpdate_CCVAE(args, common_net, dataset=dataset_train, idxs=dict_users[idx])
